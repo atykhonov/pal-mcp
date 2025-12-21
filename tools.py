@@ -1,7 +1,5 @@
 """MCP tool definitions."""
 
-import shlex
-
 import mcp.types as types
 from mcp.server import Server
 
@@ -16,73 +14,67 @@ from instructions import (
 )
 
 
-def parse_pipeline(command_string: str) -> list[list[str]]:
+def parse_pipeline(command_string: str) -> list[str]:
     """Parse a command string into a pipeline of commands.
 
     Args:
         command_string: The raw command (e.g., "git commit | review")
 
     Returns:
-        List of commands, each command is a list of tokens.
-        e.g., [["git", "commit"], ["review"]]
+        List of raw command strings.
+        e.g., ["git commit", "review"]
     """
     if not command_string:
         return []
 
-    # Split by pipe
-    pipe_segments = command_string.split("|")
-    pipeline = []
-
-    for segment in pipe_segments:
-        segment = segment.strip()
-        if not segment:
-            continue
-
-        try:
-            tokens = shlex.split(segment)
-        except ValueError:
-            # Fallback for malformed quotes
-            tokens = segment.split()
-
-        if tokens:
-            pipeline.append(tokens)
-
-    return pipeline
+    segments = command_string.split("|")
+    return [s.strip() for s in segments if s.strip()]
 
 
-def resolve_command(tokens: list[str]) -> tuple[str, str | None, list[str]]:
-    """Resolve tokens into namespace, subcommand, and extra args.
+def parse_command(raw_command: str) -> tuple[str, str | None, str]:
+    """Parse a raw command into namespace, subcommand, and remaining text.
 
     Args:
-        tokens: List of tokens (e.g., ["git", "commit", "-m", "message"])
+        raw_command: The raw command string (e.g., "git commit -m message")
 
     Returns:
-        Tuple of (namespace, subcommand, extra_args)
+        Tuple of (namespace, subcommand, rest)
+        - namespace: First word, lowercased
+        - subcommand: Second word if not a flag, lowercased
+        - rest: Everything after namespace/subcommand, preserved as-is
 
     Examples:
-        ["git", "commit"] -> ("git", "commit", [])
-        ["git", "--help"] -> ("git", None, ["--help"])
-        ["git", "help"]   -> ("git", "help", [])
-        ["help"]          -> ("help", None, [])
+        "git commit -m msg" -> ("git", "commit", "-m msg")
+        "git --help"        -> ("git", None, "--help")
+        "tr Hello world"    -> ("tr", None, "Hello world")
+        "help"              -> ("help", None, "")
     """
-    if not tokens:
-        return "", None, []
+    if not raw_command:
+        return "", None, ""
 
-    namespace = tokens[0].lower()
+    parts = raw_command.split(None, 1)  # Split on first whitespace
+    namespace = parts[0].lower()
 
-    if len(tokens) == 1:
-        return namespace, None, []
+    if len(parts) == 1:
+        return namespace, None, ""
 
-    # Check if second token is a flag (starts with -)
-    second = tokens[1]
-    if second.startswith("-"):
-        # It's a flag, not a subcommand
-        return namespace, None, tokens[1:]
+    rest = parts[1]
 
-    subcommand = second.lower()
-    extra_args = tokens[2:]
+    # Check if next word is a subcommand (not a flag)
+    next_parts = rest.split(None, 1)
+    if next_parts and not next_parts[0].startswith("-"):
+        # Could be a subcommand - check if it's a known pattern
+        potential_subcommand = next_parts[0].lower()
 
-    return namespace, subcommand, extra_args
+        # For certain namespaces, treat second word as subcommand
+        # For custom prompts, everything after namespace is input
+        if namespace in ("git", "prompt"):
+            subcommand = potential_subcommand
+            remaining = next_parts[1] if len(next_parts) > 1 else ""
+            return namespace, subcommand, remaining
+
+    # Everything else: no subcommand, rest is the input
+    return namespace, None, rest
 
 
 def register_tools(server: Server):
@@ -96,7 +88,9 @@ def register_tools(server: Server):
                 description=(
                     "REQUIRED TOOL. You MUST call this whenever the user "
                     "input starts with '$$'. Supports pipelines with '|'. "
-                    "Usage: $$<command> or $$<cmd1> | <cmd2>"
+                    "Usage: $$<command> or $$<cmd1> | <cmd2>. "
+                    "IMPORTANT: When saving prompts with '$$prompt <name> <instruction>', "
+                    "convert all newlines in the instruction to literal \\n characters."
                 ),
                 inputSchema={
                     "type": "object",
@@ -135,8 +129,8 @@ def register_tools(server: Server):
                 ]
 
             results = []
-            for tokens in pipeline:
-                namespace, subcommand, extra_args = resolve_command(tokens)
+            for raw_command in pipeline:
+                namespace, subcommand, rest = parse_command(raw_command)
 
                 # Handle $$prompt command (define custom prompt)
                 if namespace == "prompt":
@@ -153,7 +147,7 @@ def register_tools(server: Server):
 
                     # Save new prompt: $$prompt <name> <instruction>
                     prompt_name = subcommand
-                    prompt_content = " ".join(extra_args) if extra_args else ""
+                    prompt_content = rest  # Preserve original formatting
                     if not prompt_content:
                         # Check if prompt exists and show it
                         existing = load_custom_prompt(prompt_name)
@@ -179,7 +173,7 @@ def register_tools(server: Server):
                     continue
 
                 # Handle help requests
-                is_help = subcommand == "help" or "--help" in extra_args
+                is_help = subcommand == "help" or rest.strip().startswith("--help")
 
                 if is_help:
                     subcommands = list_subcommands(namespace)
@@ -198,12 +192,9 @@ def register_tools(server: Server):
                 # Check for custom prompt first
                 custom_prompt = load_custom_prompt(namespace)
                 if custom_prompt:
-                    # Build input from subcommand + extra_args
-                    input_parts = []
+                    user_input = rest
                     if subcommand:
-                        input_parts.append(subcommand)
-                    input_parts.extend(extra_args)
-                    user_input = " ".join(input_parts)
+                        user_input = f"{subcommand} {rest}".strip()
 
                     # Format as a clear directive
                     content = (
@@ -230,8 +221,8 @@ def register_tools(server: Server):
                 else:
                     header = f"## $${namespace}"
 
-                if extra_args:
-                    header += f" {' '.join(extra_args)}"
+                if rest:
+                    header += f" {rest}"
 
                 results.append(f"{header}\n\n{instruction}")
 

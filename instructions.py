@@ -135,13 +135,16 @@ def save_custom_prompt(name: str, content: str) -> str:
 
     Args:
         name: The prompt name (e.g., "tr")
-        content: The prompt instruction
+        content: The prompt instruction (supports \\n for newlines)
 
     Returns:
         Success or error message
     """
     if not name:
         return "Error: Prompt name is required"
+
+    # Convert literal \n to actual newlines
+    content = content.replace("\\n", "\n")
 
     p = PROMPTS_DIR / f"{name}.md"
     p.write_text(content, encoding="utf-8")
