@@ -205,12 +205,20 @@ def register_tools(server: Server):
                     input_parts.extend(extra_args)
                     user_input = " ".join(input_parts)
 
-                    header = f"## $${namespace}"
+                    # Format as a clear directive
+                    content = (
+                        f"**EXECUTE THE FOLLOWING INSTRUCTION:**\n\n"
+                        f"{custom_prompt}\n\n"
+                    )
                     if user_input:
-                        content = f"{custom_prompt}\n\n{user_input}"
-                    else:
-                        content = custom_prompt
-                    results.append(f"{header}\n\n{content}")
+                        content += (
+                            f"---\n\n"
+                            f"**INPUT:**\n\n{user_input}\n\n"
+                            f"---\n\n"
+                            f"**ACTION REQUIRED:** Process the input according to "
+                            f"the instruction above and output the result."
+                        )
+                    results.append(content)
                     continue
 
                 # Load standard instruction
