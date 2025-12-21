@@ -12,6 +12,7 @@ from instructions import (
     save_custom_prompt,
     load_custom_prompt,
     list_custom_prompts,
+    get_prompt_path,
 )
 
 
@@ -156,16 +157,20 @@ def register_tools(server: Server):
                     if not prompt_content:
                         # Check if prompt exists and show it
                         existing = load_custom_prompt(prompt_name)
+                        prompt_path = get_prompt_path(prompt_name)
                         if existing:
                             results.append(
                                 f"## $$prompt {prompt_name}\n\n"
+                                f"File: `{prompt_path}`\n\n"
                                 f"Current definition:\n\n{existing}"
                             )
                         else:
                             results.append(
                                 f"## $$prompt {prompt_name}\n\n"
-                                f"Error: Provide instruction to save, e.g.:\n"
-                                f"$$prompt {prompt_name} Your instruction here"
+                                f"Error: Prompt not found.\n\n"
+                                f"To create it:\n"
+                                f"$$prompt {prompt_name} Your instruction here\n\n"
+                                f"Or create file: `{prompt_path}`"
                             )
                         continue
 

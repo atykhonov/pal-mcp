@@ -163,6 +163,18 @@ def load_custom_prompt(name: str) -> str | None:
     return None
 
 
+def get_prompt_path(name: str) -> Path:
+    """Get the file path for a prompt.
+
+    Args:
+        name: The prompt name
+
+    Returns:
+        Path to the prompt file
+    """
+    return PROMPTS_DIR / f"{name}.md"
+
+
 def list_custom_prompts() -> list[str]:
     """List all custom prompts."""
     return sorted(p.stem for p in PROMPTS_DIR.glob("*.md"))
