@@ -1,0 +1,8 @@
+services:
+  pal:
+    build: .
+    ports:
+      - "8090:8090"
+    volumes:
+      - ./prompts:/app/prompts
+      - ./files:/app/files
