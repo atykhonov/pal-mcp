@@ -156,7 +156,9 @@ def register_tools(server: Server):
                             results.append(
                                 f"## $$prompt {prompt_name}\n\n"
                                 f"File: `{prompt_path}`\n\n"
-                                f"Current definition:\n\n{existing}"
+                                f"Current definition:\n\n```\n{existing}\n```\n\n"
+                                f"IMPORTANT: Display the FULL content above to the user, "
+                                f"do not summarize."
                             )
                         else:
                             results.append(
