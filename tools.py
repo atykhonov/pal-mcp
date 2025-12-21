@@ -95,8 +95,9 @@ def register_tools(server: Server):
                     "'$$git commit' -> command='git commit'. "
                     "When saving prompts with '$$prompt <name> <instruction>', "
                     "convert all newlines in the instruction to literal \\n characters. "
-                    "IMPORTANT: When user uses $LAST in a command (e.g., '$$tr $LAST'), "
-                    "replace $LAST with your previous output/response before calling this tool."
+                    "IMPORTANT: Variable substitution - before calling this tool, replace: "
+                    "$MSG = user's previous message, "
+                    "$REPLY = your (LLM's) previous response."
                 ),
                 inputSchema={
                     "type": "object",
