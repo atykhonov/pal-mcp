@@ -97,7 +97,11 @@ def register_tools(server: Server):
                     "convert all newlines in the instruction to literal \\n characters. "
                     "IMPORTANT: Variable substitution - before calling this tool, replace: "
                     "$MSG = user's previous message, "
-                    "$REPLY = your (LLM's) previous response."
+                    "$REPLY = your (LLM's) previous response. "
+                    "Any '## Heading' in your response creates a variable: "
+                    "'## Summary' -> $SUMMARY, '## Translation' -> $TRANSLATION, "
+                    "'## Corrected Text' -> $CORRECTED_TEXT, etc. "
+                    "The variable contains the content under that heading."
                 ),
                 inputSchema={
                     "type": "object",
