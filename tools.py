@@ -136,6 +136,20 @@ def register_tools(server: Server):
             for raw_command in pipeline:
                 namespace, subcommand, rest = parse_command(raw_command)
 
+                # Handle $$lorem-ipsum command
+                if namespace == "lorem-ipsum":
+                    lorem = (
+                        "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+                        "Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. "
+                        "Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris "
+                        "nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in "
+                        "reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla "
+                        "pariatur. Excepteur sint occaecat cupidatat non proident, sunt in "
+                        "culpa qui officia deserunt mollit anim id est laborum."
+                    )
+                    results.append(lorem)
+                    continue
+
                 # Handle $$prompt command (define custom prompt)
                 if namespace == "prompt":
                     if not subcommand:
