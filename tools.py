@@ -143,6 +143,12 @@ def register_tools(server: Server):
             for raw_command in pipeline:
                 namespace, subcommand, rest = parse_command(raw_command)
 
+                # Handle $$echo command
+                if namespace == "echo":
+                    # Just return the rest as-is (LLM substitutes variables)
+                    results.append(rest if rest else "")
+                    continue
+
                 # Handle $$lorem-ipsum command
                 if namespace == "lorem-ipsum":
                     lorem = (
