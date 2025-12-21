@@ -87,9 +87,13 @@ def register_tools(server: Server):
                 name="run_pal_command",
                 description=(
                     "REQUIRED TOOL. You MUST call this whenever the user "
-                    "input starts with '$$'. Supports pipelines with '|'. "
-                    "Usage: $$<command> or $$<cmd1> | <cmd2>. "
-                    "IMPORTANT: When saving prompts with '$$prompt <name> <instruction>', "
+                    "input starts with '$$'. Do NOT call list_pal_commands, "
+                    "call THIS tool instead. Pass everything after '$$' as "
+                    "the command parameter. Examples: "
+                    "'$$tr Hello' -> command='tr Hello'. "
+                    "'$$prompt tr' -> command='prompt tr' (shows prompt definition). "
+                    "'$$git commit' -> command='git commit'. "
+                    "When saving prompts with '$$prompt <name> <instruction>', "
                     "convert all newlines in the instruction to literal \\n characters."
                 ),
                 inputSchema={
