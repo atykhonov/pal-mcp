@@ -84,11 +84,15 @@ def list_available_commands() -> list[str]:
     for p in INSTRUCTIONS_DIR.glob("*.md"):
         cmds.append(p.stem)
 
-    # Nested commands (namespace/subcommand.md)
+    # Nested commands (namespace/subcommand.md), excluding "prompts" dir
     for d in INSTRUCTIONS_DIR.iterdir():
-        if d.is_dir():
+        if d.is_dir() and d.name != "prompts":
             for p in d.glob("*.md"):
                 cmds.append(f"{d.name} {p.stem}")
+
+    # Add custom prompts as top-level commands
+    for p in PROMPTS_DIR.glob("*.md"):
+        cmds.append(p.stem)
 
     # Add defaults
     for name, content in DEFAULT_INSTRUCTIONS.items():
