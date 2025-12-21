@@ -94,7 +94,9 @@ def register_tools(server: Server):
                     "'$$prompt tr' -> command='prompt tr' (shows prompt definition). "
                     "'$$git commit' -> command='git commit'. "
                     "When saving prompts with '$$prompt <name> <instruction>', "
-                    "convert all newlines in the instruction to literal \\n characters."
+                    "convert all newlines in the instruction to literal \\n characters. "
+                    "IMPORTANT: When user uses $LAST in a command (e.g., '$$tr $LAST'), "
+                    "replace $LAST with your previous output/response before calling this tool."
                 ),
                 inputSchema={
                     "type": "object",
