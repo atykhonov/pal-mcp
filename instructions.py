@@ -5,9 +5,9 @@ from pathlib import Path
 from config import INSTRUCTIONS_DIR, FILES_DIR
 
 # =============================================================================
-# Custom Prompts Directory
+# Custom Prompts Directory (local to project)
 # =============================================================================
-PROMPTS_DIR = INSTRUCTIONS_DIR / "prompts"
+PROMPTS_DIR = Path(__file__).parent / "prompts"
 PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
 
 # =============================================================================
