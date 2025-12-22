@@ -2,12 +2,14 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install dependencies
+# Copy source code and config
 COPY pyproject.toml README.md ./
+COPY src/ src/
+
+# Install package
 RUN pip install --no-cache-dir .
 
-# Copy source code
-COPY src/ src/
+# Copy runtime files
 COPY files/ files/
 COPY prompts/ prompts/
 
