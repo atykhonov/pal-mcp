@@ -57,7 +57,7 @@ class Settings(BaseSettings):
         if self.prompts_dir is not None:
             return self.prompts_dir.expanduser()
         # Default: Use the project-level prompts directory
-        return Path(__file__).parent.parent.parent.parent / "prompts"
+        return Path(__file__).parent.parent.parent / "prompts"
 
     def ensure_directories(self) -> None:
         """Create required directories if they don't exist."""
