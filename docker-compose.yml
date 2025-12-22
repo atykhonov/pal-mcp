@@ -6,3 +6,6 @@ services:
     volumes:
       - ./files:/app/files
       - ./prompts:/app/prompts
+    environment:
+      - PAL_SERVER_PORT=8090
+      - PAL_LOG_LEVEL=INFO

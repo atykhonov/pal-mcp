@@ -1,7 +1,21 @@
 FROM python:3.11-slim
+
 WORKDIR /app
-RUN pip install mcp uvicorn
-COPY server.py config.py instructions.py tools.py ./
-COPY files files/
+
+# Install dependencies
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir .
+
+# Copy source code
+COPY src/ src/
+COPY files/ files/
+COPY prompts/ prompts/
+
+# Set environment variables
+ENV PAL_SERVER_HOST=0.0.0.0
+ENV PAL_SERVER_PORT=8090
+
 EXPOSE 8090
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8090"]
+
+# Run the server
+CMD ["python", "-m", "pal"]
