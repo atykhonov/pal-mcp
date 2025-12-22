@@ -26,7 +26,7 @@ pip install -e ".[dev]"
 ### Using Docker
 
 ```bash
-docker-compose up -d
+docker compose up --build -d
 ```
 
 ## Quick Start
