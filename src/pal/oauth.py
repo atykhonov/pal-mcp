@@ -171,17 +171,54 @@ class OAuthManager:
         return access_token
 
     def validate_token(self, token: str) -> bool:
-        """Validate an access token."""
+        """Validate an access token by verifying its signature."""
+        # First check in-memory cache
         access_token = self._tokens.get(token)
-        if not access_token:
-            return False
+        if access_token:
+            # Check expiration
+            if time.time() > access_token.created_at + access_token.expires_in:
+                del self._tokens[token]
+                return False
+            return True
 
-        # Check expiration
-        if time.time() > access_token.created_at + access_token.expires_in:
-            del self._tokens[token]
-            return False
+        # If not in memory, verify the token signature cryptographically
+        # This allows tokens to be valid across server restarts
+        try:
+            parts = token.split(".")
+            if len(parts) != 2:
+                return False
 
-        return True
+            payload_b64, signature_b64 = parts
+            payload_bytes = urlsafe_b64decode(payload_b64 + "==")  # Add padding
+
+            # Verify signature
+            expected_signature = hmac.new(
+                self.settings.oauth_secret.encode(),
+                payload_bytes,
+                hashlib.sha256,
+            ).digest()
+            actual_signature = urlsafe_b64decode(signature_b64 + "==")
+
+            if not hmac.compare_digest(expected_signature, actual_signature):
+                return False
+
+            # Parse and check expiration
+            payload = json.loads(payload_bytes.decode())
+            if time.time() > payload.get("exp", 0):
+                return False
+
+            # Token is valid - optionally cache it in memory
+            client_id = payload.get("client_id", "")
+            self._tokens[token] = AccessToken(
+                token=token,
+                client_id=client_id,
+                created_at=payload.get("iat", time.time()),
+                expires_in=payload.get("exp", 0) - payload.get("iat", 0),
+            )
+            return True
+
+        except Exception:
+            return False
 
     def is_ip_allowed(self, client_ip: str) -> bool:
         """Check if client IP is in allowed networks (bypasses OAuth)."""
