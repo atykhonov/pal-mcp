@@ -48,3 +48,6 @@ prompts/
 
 # Local settings
 .claude/
+
+# SSL certificates
+certs/

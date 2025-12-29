@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import logging
+import secrets
 from functools import lru_cache
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -21,8 +22,20 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
+    transport: Annotated[
+        Literal["sse", "stdio"],
+        Field(description="Transport type: 'sse' for HTTP/SSE or 'stdio' for standard I/O"),
+    ] = "sse"
+
     server_port: Annotated[int, Field(description="Server port")] = 8090
     server_host: Annotated[str, Field(description="Server host")] = "0.0.0.0"
+
+    ssl_certfile: Annotated[
+        Path | None, Field(description="Path to SSL certificate file")
+    ] = None
+    ssl_keyfile: Annotated[
+        Path | None, Field(description="Path to SSL key file")
+    ] = None
 
     instructions_dir: Annotated[
         Path, Field(description="Directory for instruction files")
@@ -37,6 +50,35 @@ class Settings(BaseSettings):
     ] = None
 
     log_level: Annotated[str, Field(description="Logging level")] = "INFO"
+
+    # OAuth settings
+    oauth_enabled: Annotated[
+        bool, Field(description="Enable OAuth 2.0 for external connections")
+    ] = True
+
+    oauth_public_url: Annotated[
+        str | None,
+        Field(description="Public URL for OAuth redirects (e.g., https://host.ts.net)"),
+    ] = None
+
+    oauth_secret: Annotated[
+        str,
+        Field(description="Secret key for signing tokens (set PAL_OAUTH_SECRET for persistence)"),
+    ] = "pal-default-secret-change-in-production"
+
+    oauth_token_expiry: Annotated[
+        int, Field(description="Token expiry in seconds (default 24 hours)")
+    ] = 86400
+
+    oauth_allowed_networks: Annotated[
+        str,
+        Field(description="Comma-separated CIDR ranges that bypass OAuth"),
+    ] = "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10"
+
+    @property
+    def oauth_allowed_cidrs(self) -> list[str]:
+        """Get list of CIDR ranges that bypass OAuth."""
+        return [cidr.strip() for cidr in self.oauth_allowed_networks.split(",") if cidr.strip()]
 
     @property
     def instructions_path(self) -> Path:
