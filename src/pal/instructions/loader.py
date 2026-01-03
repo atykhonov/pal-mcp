@@ -75,6 +75,10 @@ def load_instruction(namespace: str, subcommand: str | None = None) -> str:
     return f"Unknown command: {namespace}"
 
 
+# Built-in commands that are hardcoded handlers (not loaded from files)
+BUILTIN_COMMANDS: set[str] = {"echo", "lorem-ipsum", "prompt", "help"}
+
+
 def list_available_commands() -> list[str]:
     """List all available commands.
 
@@ -86,6 +90,9 @@ def list_available_commands() -> list[str]:
     prompts_path = settings.prompts_path
 
     commands: set[str] = set()
+
+    # Add built-in commands (hardcoded handlers)
+    commands.update(BUILTIN_COMMANDS)
 
     # Flat commands (*.md in root)
     for file_path in instructions_path.glob("*.md"):

@@ -15,6 +15,20 @@ from pal.instructions import (
 )
 from pal.tools.parser import ParsedCommand
 
+# Built-in commands with descriptions
+# These are hardcoded handlers, not loaded from files
+BUILTIN_COMMANDS: dict[str, str] = {
+    "echo": "Echo text with variable substitution",
+    "lorem-ipsum": "Generate Lorem ipsum placeholder text",
+    "prompt": "List, view, or create custom prompts",
+    "help": "Show all available commands",
+}
+
+# Default commands from DEFAULT_INSTRUCTIONS (loaded from files/defaults)
+DEFAULT_COMMANDS: dict[str, str] = {
+    "git commit": "Create a git commit with conventional format",
+}
+
 # Lorem ipsum text for the lorem-ipsum command
 LOREM_IPSUM: str = (
     "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
@@ -103,8 +117,45 @@ def handle_prompt(command: ParsedCommand) -> CommandResult | None:
     return CommandResult(output=f"## $$prompt {prompt_name}\n\n{result}")
 
 
+def handle_help_command(command: ParsedCommand) -> CommandResult | None:
+    """Handle the $$help command to show all available commands."""
+    if command.namespace != "help":
+        return None
+
+    lines: list[str] = ["## $$help", ""]
+
+    # Section 1: Pre-defined commands
+    lines.append("### Pre-defined Commands")
+    lines.append("")
+
+    # Built-in handlers
+    for cmd, desc in sorted(BUILTIN_COMMANDS.items()):
+        lines.append(f"- `$${cmd}` - {desc}")
+
+    # Default commands from DEFAULT_INSTRUCTIONS
+    for cmd, desc in sorted(DEFAULT_COMMANDS.items()):
+        lines.append(f"- `$${cmd}` - {desc}")
+
+    lines.append("")
+
+    # Section 2: Custom commands
+    lines.append("### Custom Commands")
+    lines.append("")
+
+    custom_prompts = list_custom_prompts()
+    if custom_prompts:
+        for prompt_name in custom_prompts:
+            lines.append(f"- `$${prompt_name}`")
+    else:
+        lines.append("No custom commands defined yet.")
+        lines.append("")
+        lines.append("Create one with: `$$prompt <name> <instruction>`")
+
+    return CommandResult(output="\n".join(lines))
+
+
 def handle_help(command: ParsedCommand) -> CommandResult | None:
-    """Handle help requests for a namespace."""
+    """Handle help requests for a namespace (e.g., $$git --help)."""
     is_help = command.subcommand == "help" or command.rest.strip().startswith("--help")
 
     if not is_help:
@@ -167,6 +218,7 @@ COMMAND_HANDLERS: list[CommandHandler] = [
     handle_echo,
     handle_lorem_ipsum,
     handle_prompt,
+    handle_help_command,
     handle_help,
     handle_custom_prompt,
 ]
