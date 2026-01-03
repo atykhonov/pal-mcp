@@ -236,15 +236,11 @@ def _handle_add(
     if not input_text:
         return CommandResult(output="## $$notes add\n\nError: No content provided.")
 
-    # Parse tags
-    user_tags: list[str] = []
-    content = input_text
+    # Parse tags using shared helper
+    user_tags, content = _parse_tag_filter(input_text)
 
-    # Check for -t or --tags flag
-    tag_match = re.match(r"^(?:-t|--tags)\s+([^\s]+)\s+(.+)$", input_text, re.DOTALL)
-    if tag_match:
-        user_tags = [t.strip() for t in tag_match.group(1).split(",") if t.strip()]
-        content = tag_match.group(2).strip()
+    if not content:
+        return CommandResult(output="## $$notes add\n\nError: No content provided.")
 
     # Generate title (first sentence or first 50 chars)
     title = content.split(".")[0][:50]
