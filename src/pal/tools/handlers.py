@@ -2,9 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Protocol
-
 from pal.instructions import (
     get_prompt_path,
     list_custom_prompts,
@@ -13,13 +10,16 @@ from pal.instructions import (
     load_instruction,
     save_custom_prompt,
 )
+from pal.tools.notes import handle_notes
 from pal.tools.parser import ParsedCommand
+from pal.tools.types import CommandHandler, CommandResult
 
 # Built-in commands with descriptions
 # These are hardcoded handlers, not loaded from files
 BUILTIN_COMMANDS: dict[str, str] = {
     "echo": "Echo text with variable substitution",
     "lorem-ipsum": "Generate Lorem ipsum placeholder text",
+    "notes": "Manage notes with Meilisearch (add, list, search, ai)",
     "prompt": "List, view, or create custom prompts",
     "help": "Show all available commands",
 }
@@ -39,22 +39,6 @@ LOREM_IPSUM: str = (
     "pariatur. Excepteur sint occaecat cupidatat non proident, sunt in "
     "culpa qui officia deserunt mollit anim id est laborum."
 )
-
-
-@dataclass(frozen=True, slots=True)
-class CommandResult:
-    """Result of a command execution."""
-
-    output: str
-    handled: bool = True
-
-
-class CommandHandler(Protocol):
-    """Protocol for command handlers."""
-
-    def __call__(self, command: ParsedCommand) -> CommandResult | None:
-        """Handle a command and return the result, or None if not handled."""
-        ...
 
 
 def handle_echo(command: ParsedCommand) -> CommandResult | None:
@@ -220,6 +204,7 @@ COMMAND_HANDLERS: list[CommandHandler] = [
     handle_prompt,
     handle_help_command,
     handle_help,
+    handle_notes,
     handle_custom_prompt,
 ]
 
@@ -236,6 +221,12 @@ def execute_command(command: ParsedCommand) -> str:
     for handler in COMMAND_HANDLERS:
         result = handler(command)
         if result is not None:
+            if result.display is not None:
+                # Quiet mode: show minimal display, full content in context block
+                return (
+                    f"{result.display}\n\n"
+                    f"<context>\n{result.output}\n</context>"
+                )
             return result.output
 
     # Fallback to standard instruction

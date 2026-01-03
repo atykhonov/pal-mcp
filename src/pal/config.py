@@ -75,6 +75,29 @@ class Settings(BaseSettings):
         Field(description="Comma-separated CIDR ranges that bypass OAuth"),
     ] = "127.0.0.0/8,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16,100.64.0.0/10"
 
+    # Meilisearch settings
+    meilisearch_url: Annotated[
+        str | None,
+        Field(description="Meilisearch URL for notes commands (e.g., http://localhost:7700)"),
+    ] = None
+
+    # Ollama settings
+    ollama_url: Annotated[
+        str,
+        Field(description="Ollama URL for AI features (e.g., http://localhost:11434)"),
+    ] = "http://localhost:11434"
+
+    ollama_model: Annotated[
+        str,
+        Field(description="Ollama model for AI features (e.g., llama3.2, mistral)"),
+    ] = "llama3.2"
+
+    # Notes AI settings
+    notes_ai_provider: Annotated[
+        Literal["ollama", "claude", "none"],
+        Field(description="AI provider for notes tag generation: 'ollama', 'claude', or 'none'"),
+    ] = "claude"
+
     @property
     def oauth_allowed_cidrs(self) -> list[str]:
         """Get list of CIDR ranges that bypass OAuth."""

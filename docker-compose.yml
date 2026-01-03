@@ -12,4 +12,8 @@ services:
       - PAL_LOG_LEVEL=INFO
       - PAL_PROMPTS_DIR=/app/prompts
       - PAL_OAUTH_PUBLIC_URL=https://mcpv1.tail43545a.ts.net
+      - PAL_MEILISEARCH_URL=http://host.docker.internal:7700
+      - PAL_OLLAMA_URL=http://host.docker.internal:11434
       - PYTHONPATH=/app/src
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
