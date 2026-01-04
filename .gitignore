@@ -51,3 +51,6 @@ prompts/
 
 # SSL certificates
 certs/
+
+# Notes data (Meilisearch, Ollama)
+data/

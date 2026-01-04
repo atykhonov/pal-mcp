@@ -14,9 +14,37 @@ services:
       - PAL_LOG_LEVEL=INFO
       - PAL_PROMPTS_DIR=/app/prompts
       - PAL_OAUTH_PUBLIC_URL=https://mcpv1.tail43545a.ts.net
-      - PAL_MEILISEARCH_URL=http://host.docker.internal:7700
-      - PAL_OLLAMA_URL=http://host.docker.internal:11434
+      - PAL_MEILISEARCH_URL=http://meilisearch:7700
+      - PAL_OLLAMA_URL=http://ollama:11434
       - PAL_NOTES_AI_PROVIDER=pal-follow-up
       - PYTHONPATH=/app/src
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
+
+  # Notes infrastructure (optional, use: docker compose --profile notes up)
+  meilisearch:
+    image: getmeili/meilisearch:v1.11
+    profiles: ["notes"]
+    ports:
+      - "7700:7700"
+    volumes:
+      - ./data/meilisearch:/meili_data
+    environment:
+      - MEILI_ENV=development
+      - MEILI_NO_ANALYTICS=true
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["notes"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ./data/ollama:/root/.ollama
+    restart: unless-stopped
+
+  meilisearch-ui:
+    image: riccoxie/meilisearch-ui:latest
+    profiles: ["notes"]
+    ports:
+      - "24900:24900"
+    restart: unless-stopped
