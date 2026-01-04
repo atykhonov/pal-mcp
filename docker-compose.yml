@@ -2,7 +2,7 @@ services:
   pal:
     build: .
     ports:
-      - "8090:8090"
+      - "${PAL_SERVER_PORT:-8090}:${PAL_SERVER_PORT:-8090}"
     volumes:
       - ./files:/app/files
       - ./prompts:/app/prompts
@@ -10,19 +10,20 @@ services:
       - ~/.local/share/claude:/root/.local/share/claude:ro
       - ~/.claude:/root/.claude
     environment:
-      - PAL_SERVER_PORT=8090
-      - PAL_LOG_LEVEL=INFO
+      - PAL_SERVER_PORT=${PAL_SERVER_PORT:-8090}
+      - PAL_LOG_LEVEL=${PAL_LOG_LEVEL:-INFO}
       - PAL_PROMPTS_DIR=/app/prompts
-      - PAL_OAUTH_PUBLIC_URL=https://mcpv1.tail43545a.ts.net
-      - PAL_MEILISEARCH_URL=http://meilisearch:7700
-      - PAL_OLLAMA_URL=http://ollama:11434
+      - PAL_OAUTH_PUBLIC_URL=${PAL_OAUTH_PUBLIC_URL:-}
+      - PAL_MEILISEARCH_URL=${PAL_MEILISEARCH_URL:-http://meilisearch:7700}
+      - PAL_OLLAMA_URL=${PAL_OLLAMA_URL:-http://ollama:11434}
       - PAL_NOTES_ENABLED=${PAL_NOTES_ENABLED:-false}
-      - PAL_NOTES_AI_PROVIDER=pal-follow-up
+      - PAL_NOTES_AI_PROVIDER=${PAL_NOTES_AI_PROVIDER:-pal-follow-up}
       - PYTHONPATH=/app/src
     restart: unless-stopped
 
   # Notes infrastructure (optional)
-  # To enable: PAL_NOTES_ENABLED=true docker compose --profile notes up -d
+  # To enable: edit .env and set PAL_NOTES_ENABLED=true, then:
+  #   docker compose --profile notes up -d
   meilisearch:
     image: getmeili/meilisearch:v1.11
     profiles: ["notes"]
