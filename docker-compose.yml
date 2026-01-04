@@ -16,11 +16,13 @@ services:
       - PAL_OAUTH_PUBLIC_URL=https://mcpv1.tail43545a.ts.net
       - PAL_MEILISEARCH_URL=http://meilisearch:7700
       - PAL_OLLAMA_URL=http://ollama:11434
+      - PAL_NOTES_ENABLED=${PAL_NOTES_ENABLED:-false}
       - PAL_NOTES_AI_PROVIDER=pal-follow-up
       - PYTHONPATH=/app/src
     restart: unless-stopped
 
-  # Notes infrastructure (optional, use: docker compose --profile notes up)
+  # Notes infrastructure (optional)
+  # To enable: PAL_NOTES_ENABLED=true docker compose --profile notes up -d
   meilisearch:
     image: getmeili/meilisearch:v1.11
     profiles: ["notes"]

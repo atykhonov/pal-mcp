@@ -92,7 +92,12 @@ class Settings(BaseSettings):
         Field(description="Ollama model for AI features (e.g., llama3.2, mistral)"),
     ] = "llama3.2"
 
-    # Notes AI settings
+    # Notes settings
+    notes_enabled: Annotated[
+        bool,
+        Field(description="Enable notes feature (requires Meilisearch)"),
+    ] = False
+
     notes_ai_provider: Annotated[
         Literal["mcp-sampling", "ollama", "pal-follow-up", "none"],
         Field(
