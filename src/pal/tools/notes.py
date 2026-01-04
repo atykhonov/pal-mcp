@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import logging
+import os
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import httpx
+import mcp.types as mcp_types
 
 from pal.config import get_settings
 from pal.tools.parser import ParsedCommand
 from pal.tools.types import CommandResult
+
+if TYPE_CHECKING:
+    from mcp.server.session import ServerSession
+    from mcp.shared.context import RequestContext
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +26,10 @@ logger = logging.getLogger(__name__)
 REQUEST_TIMEOUT = 10.0
 
 
-def handle_notes(command: ParsedCommand) -> CommandResult | None:
+async def handle_notes(
+    command: ParsedCommand,
+    ctx: RequestContext[ServerSession, object, object] | None = None,
+) -> CommandResult | None:
     """Handle notes commands with direct Meilisearch integration.
 
     Subcommands:
@@ -36,6 +45,10 @@ def handle_notes(command: ParsedCommand) -> CommandResult | None:
 
     Tag filtering:
         Use -t tag1,tag2 or --tags tag1,tag2 to filter by tags.
+
+    Args:
+        command: The parsed command to handle.
+        ctx: Optional MCP request context for session access (for sampling).
     """
     if command.namespace != "notes":
         return None
@@ -52,12 +65,13 @@ def handle_notes(command: ParsedCommand) -> CommandResult | None:
     full_input = f"{subcommand} {rest}".strip() if subcommand else rest
 
     if full_input.startswith("add ") or full_input == "add":
-        return _handle_add(
+        return await _handle_add(
             settings.meilisearch_url,
             settings.ollama_url,
             settings.ollama_model,
             settings.notes_ai_provider,
             full_input[4:].strip(),
+            ctx=ctx,
         )
     elif full_input == "list" or full_input.startswith("list "):
         # Parse tag filters: $$notes list -t tag1,tag2
@@ -168,14 +182,19 @@ def _build_tag_filter(tags: list[str]) -> str | None:
 
 def _generate_ai_tags(ollama_url: str, ollama_model: str, content: str) -> list[str]:
     """Generate semantic tags using Ollama AI."""
+    logger.debug("Starting Ollama AI tag generation")
+    logger.debug(f"Using model: {ollama_model} at {ollama_url}")
+
     prompt = (
         "Extract 3-5 topic tags for this note. "
         "Return ONLY comma-separated lowercase single-word tags, nothing else. "
         "Focus on the main technical concepts and topics.\n\n"
         f"{content[:1000]}"  # Limit content length for efficiency
     )
+    logger.debug(f"Prompt length: {len(prompt)} chars (content truncated to 1000)")
 
     try:
+        logger.debug("Sending request to Ollama API...")
         with httpx.Client(timeout=30.0) as client:
             response = client.post(
                 f"{ollama_url}/api/generate",
@@ -188,17 +207,23 @@ def _generate_ai_tags(ollama_url: str, ollama_model: str, content: str) -> list[
             )
             response.raise_for_status()
             data = response.json()
+            logger.debug("Received response from Ollama API")
 
         # Parse the response
         raw_tags = data.get("response", "").strip()
+        logger.debug(f"Raw AI response: {raw_tags!r}")
+
         # Clean up: split by comma, strip whitespace, lowercase, remove empty
         tags = [
             t.strip().lower().replace(" ", "-")
             for t in raw_tags.split(",")
             if t.strip() and len(t.strip()) < 30
         ]
+        logger.debug(f"Tags after initial parsing: {tags}")
+
         # Filter out non-alphanumeric tags and limit to 5
         tags = [t for t in tags if re.match(r"^[a-z0-9-]+$", t)][:5]
+        logger.info(f"Generated {len(tags)} tags via Ollama: {tags}")
         return tags
     except Exception as e:
         logger.warning(f"AI tag generation failed: {e}")
@@ -207,22 +232,104 @@ def _generate_ai_tags(ollama_url: str, ollama_model: str, content: str) -> list[
 
 def _extract_keyword_tags(content: str) -> list[str]:
     """Extract keyword tags as fallback (simple approach)."""
+    logger.debug("Starting keyword-based tag extraction (fallback)")
+
     words = re.findall(r"\b[a-zA-Z]{4,}\b", content.lower())
+    logger.debug(f"Found {len(words)} words with 4+ characters")
+
     common_words = {
         "this", "that", "with", "from", "have", "been", "were", "they",
         "their", "about", "would", "could", "should", "which", "there",
         "where", "when", "what", "some", "into", "more", "other", "very",
         "just", "also", "than", "then", "only", "here", "technical", "note",
     }
-    return list(dict.fromkeys(w for w in words if w not in common_words))[:3]
+    tags = list(dict.fromkeys(w for w in words if w not in common_words))[:3]
+    logger.info(f"Extracted {len(tags)} keyword tags: {tags}")
+    return tags
 
 
-def _handle_add(
+async def _generate_tags_via_mcp_sampling(
+    content: str,
+    ctx: RequestContext[ServerSession, object, object],
+) -> list[str]:
+    """Generate semantic tags using MCP sampling (client's LLM).
+
+    This requests the connected MCP client to generate tags using
+    whatever LLM the client has configured (Claude, Gemini, etc.).
+
+    Args:
+        content: The note content to generate tags for.
+        ctx: The MCP request context with session access.
+
+    Returns:
+        List of generated tags, or empty list if sampling fails.
+    """
+    logger.debug("Starting MCP sampling tag generation")
+
+    session = ctx.session
+
+    # Check if client supports sampling
+    sampling_capability = mcp_types.ClientCapabilities(
+        sampling=mcp_types.SamplingCapability()
+    )
+
+    if not session.check_client_capability(sampling_capability):
+        logger.warning("Client does not support MCP sampling")
+        return []
+
+    prompt = (
+        "Extract 3-5 topic tags for this note. "
+        "Return ONLY comma-separated lowercase single-word tags, nothing else. "
+        "Focus on the main technical concepts and topics.\n\n"
+        f"{content[:2000]}"  # Limit content for efficiency
+    )
+
+    try:
+        logger.debug("Sending sampling request to client LLM...")
+        result = await session.create_message(
+            messages=[
+                mcp_types.SamplingMessage(
+                    role="user",
+                    content=mcp_types.TextContent(type="text", text=prompt),
+                )
+            ],
+            max_tokens=100,
+            system_prompt="You are a tag extraction assistant. Output only comma-separated lowercase tags, nothing else.",
+        )
+
+        # Extract text from result
+        if isinstance(result.content, mcp_types.TextContent):
+            raw_tags = result.content.text.strip()
+        else:
+            logger.warning(f"Unexpected content type from sampling: {type(result.content)}")
+            return []
+
+        logger.debug(f"Raw MCP sampling response: {raw_tags!r}")
+
+        # Parse tags (same logic as other providers)
+        tags = [
+            t.strip().lower().replace(" ", "-")
+            for t in raw_tags.split(",")
+            if t.strip() and len(t.strip()) < 30
+        ]
+
+        # Filter to valid tag format and limit to 5
+        tags = [t for t in tags if re.match(r"^[a-z0-9-]+$", t)][:5]
+        logger.info(f"Generated {len(tags)} tags via MCP sampling: {tags}")
+        return tags
+
+    except Exception as e:
+        logger.warning(f"MCP sampling tag generation failed: {e}")
+        return []
+
+
+async def _handle_add(
     meili_url: str,
     ollama_url: str,
     ollama_model: str,
     ai_provider: str,
     input_text: str,
+    ctx: RequestContext[ServerSession, object, object] | None = None,
 ) -> CommandResult:
     """Add a new note to Meilisearch.
 
@@ -230,8 +337,9 @@ def _handle_add(
         meili_url: Meilisearch URL.
         ollama_url: Ollama URL for AI features.
         ollama_model: Ollama model name.
-        ai_provider: AI provider for tag generation ('ollama', 'claude', or 'none').
+        ai_provider: AI provider for tag generation.
         input_text: The note content with optional flags.
+        ctx: Optional MCP request context for session access (for sampling).
     """
     if not input_text:
         return CommandResult(output="## $$notes add\n\nError: No content provided.")
@@ -249,23 +357,44 @@ def _handle_add(
 
     # Generate AI tags based on provider
     ai_tags: list[str] = []
-    claude_prompt: str | None = None
+    followup_prompt: str | None = None
 
-    if ai_provider == "ollama":
+    logger.info(f"Tag generation using provider: {ai_provider}")
+    logger.debug(f"User-provided tags: {user_tags}")
+
+    if ai_provider == "mcp-sampling":
+        # Use MCP sampling (client's LLM) for tag generation
+        if ctx is not None:
+            logger.debug("Attempting MCP sampling tag generation...")
+            ai_tags = await _generate_tags_via_mcp_sampling(content, ctx)
+            if not ai_tags:
+                logger.debug("MCP sampling failed/unsupported, falling back to keyword extraction")
+                ai_tags = _extract_keyword_tags(content)
+        else:
+            logger.warning("MCP sampling requested but no context available, using keywords")
+            ai_tags = _extract_keyword_tags(content)
+    elif ai_provider == "ollama":
         # Use Ollama for tag generation (synchronous, may be slow)
+        logger.debug("Attempting Ollama AI tag generation...")
         ai_tags = _generate_ai_tags(ollama_url, ollama_model, content)
         if not ai_tags:
+            logger.debug("Ollama failed, falling back to keyword extraction")
             ai_tags = _extract_keyword_tags(content)
-    elif ai_provider == "claude":
-        # Use keyword extraction now, prompt Claude to suggest better tags
+    elif ai_provider == "pal-follow-up":
+        # Use keyword extraction now, prompt client LLM to run follow-up tagging command
+        logger.debug("Using 'pal-follow-up' provider: keyword extraction + follow-up command")
         ai_tags = _extract_keyword_tags(content)
-        claude_prompt = content[:500]  # Content for Claude to analyze
+        followup_prompt = content[:500]  # Content for Claude to analyze
     else:  # "none"
         # Keyword extraction only
+        logger.debug("Using 'none' provider: keyword extraction only")
         ai_tags = _extract_keyword_tags(content)
+
+    logger.debug(f"AI-generated tags: {ai_tags}")
 
     # Merge user tags (priority) with AI tags
     all_tags = list(dict.fromkeys(user_tags + ai_tags))
+    logger.info(f"Final merged tags: {all_tags}")
 
     # Create document
     note_id = str(uuid.uuid4())
@@ -298,11 +427,11 @@ def _handle_add(
         ]
 
         # If using Claude provider, instruct Claude to auto-apply tags
-        if claude_prompt:
+        if followup_prompt:
             output_lines.extend([
                 "\n---",
                 f"**Action required:** Execute `$$notes tags {note_id[:8]} <tags>` now, choosing 3-5 semantic tags from this content:\n",
-                f"> {claude_prompt}",
+                f"> {followup_prompt}",
             ])
 
         return CommandResult(output="\n".join(output_lines))
@@ -517,14 +646,20 @@ def _get_note_by_id(meili_url: str, note_id: str) -> dict[str, Any] | None:
     except httpx.ConnectError:
         return None
 
-    # If not found, try partial UUID match
+    # If not found, try partial UUID match using search
+    # Search for the partial ID - Meilisearch will find documents containing it
     try:
         with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
-            response = client.get(f"{meili_url}/indexes/notes/documents?limit=100")
+            response = client.post(
+                f"{meili_url}/indexes/notes/search",
+                json={"q": note_id, "limit": 10},
+                headers={"Content-Type": "application/json"},
+            )
             response.raise_for_status()
             data = response.json()
 
-        results = data.get("results", [])
+        # Filter results to those that actually start with the prefix
+        results = data.get("hits", [])
         matches = [n for n in results if n.get("id", "").lower().startswith(note_id)]
 
         if len(matches) == 1:
@@ -560,9 +695,10 @@ def _handle_view(meili_url: str, input_text: str, quiet: bool = False) -> Comman
     if not note_id:
         return CommandResult(output="## $$notes view\n\nError: No note ID provided.")
 
-    # Try as numeric index first
+    # Try as numeric index only for small numbers (1-99)
+    # UUIDs can start with all digits (e.g., 45347887) so we need to be careful
     note = None
-    if note_id.isdigit():
+    if note_id.isdigit() and len(note_id) <= 2:
         note = _get_note_by_index(meili_url, int(note_id))
     else:
         note = _get_note_by_id(meili_url, note_id)
@@ -619,9 +755,9 @@ def _handle_tags(meili_url: str, input_text: str) -> CommandResult:
             output="## $$notes tags\n\nError: No tags provided."
         )
 
-    # Get the note
+    # Get the note (only use index for small numbers 1-99)
     note = None
-    if note_id.isdigit():
+    if note_id.isdigit() and len(note_id) <= 2:
         note = _get_note_by_index(meili_url, int(note_id))
     else:
         note = _get_note_by_id(meili_url, note_id)
@@ -678,9 +814,9 @@ def _handle_delete(meili_url: str, note_id: str) -> CommandResult:
     if not note_id:
         return CommandResult(output="## $$notes delete\n\nError: No note ID provided.")
 
-    # Get the note first to show what was deleted
+    # Get the note first to show what was deleted (only use index for small numbers 1-99)
     note = None
-    if note_id.isdigit():
+    if note_id.isdigit() and len(note_id) <= 2:
         note = _get_note_by_index(meili_url, int(note_id))
     else:
         note = _get_note_by_id(meili_url, note_id)

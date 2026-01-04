@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import asyncio
+from typing import TYPE_CHECKING
+
 from pal.instructions import (
     get_prompt_path,
     list_custom_prompts,
@@ -13,6 +16,10 @@ from pal.instructions import (
 from pal.tools.notes import handle_notes
 from pal.tools.parser import ParsedCommand
 from pal.tools.types import CommandHandler, CommandResult
+
+if TYPE_CHECKING:
+    from mcp.server.session import ServerSession
+    from mcp.shared.context import RequestContext
 
 # Built-in commands with descriptions
 # These are hardcoded handlers, not loaded from files
@@ -41,21 +48,30 @@ LOREM_IPSUM: str = (
 )
 
 
-def handle_echo(command: ParsedCommand) -> CommandResult | None:
+def handle_echo(
+    command: ParsedCommand,
+    ctx: RequestContext[ServerSession, object, object] | None = None,
+) -> CommandResult | None:
     """Handle the echo command."""
     if command.namespace != "echo":
         return None
     return CommandResult(output=command.rest or "")
 
 
-def handle_lorem_ipsum(command: ParsedCommand) -> CommandResult | None:
+def handle_lorem_ipsum(
+    command: ParsedCommand,
+    ctx: RequestContext[ServerSession, object, object] | None = None,
+) -> CommandResult | None:
     """Handle the lorem-ipsum command."""
     if command.namespace != "lorem-ipsum":
         return None
     return CommandResult(output=LOREM_IPSUM)
 
 
-def handle_prompt(command: ParsedCommand) -> CommandResult | None:
+def handle_prompt(
+    command: ParsedCommand,
+    ctx: RequestContext[ServerSession, object, object] | None = None,
+) -> CommandResult | None:
     """Handle the prompt command for managing custom prompts."""
     if command.namespace != "prompt":
         return None
@@ -101,7 +117,10 @@ def handle_prompt(command: ParsedCommand) -> CommandResult | None:
     return CommandResult(output=f"## $$prompt {prompt_name}\n\n{result}")
 
 
-def handle_help_command(command: ParsedCommand) -> CommandResult | None:
+def handle_help_command(
+    command: ParsedCommand,
+    ctx: RequestContext[ServerSession, object, object] | None = None,
+) -> CommandResult | None:
     """Handle the $$help command to show all available commands."""
     if command.namespace != "help":
         return None
@@ -138,7 +157,10 @@ def handle_help_command(command: ParsedCommand) -> CommandResult | None:
     return CommandResult(output="\n".join(lines))
 
 
-def handle_help(command: ParsedCommand) -> CommandResult | None:
+def handle_help(
+    command: ParsedCommand,
+    ctx: RequestContext[ServerSession, object, object] | None = None,
+) -> CommandResult | None:
     """Handle help requests for a namespace (e.g., $$git --help)."""
     is_help = command.subcommand == "help" or command.rest.strip().startswith("--help")
 
@@ -157,7 +179,10 @@ def handle_help(command: ParsedCommand) -> CommandResult | None:
     return CommandResult(output=f"{header}\n\n{content}")
 
 
-def handle_custom_prompt(command: ParsedCommand) -> CommandResult | None:
+def handle_custom_prompt(
+    command: ParsedCommand,
+    ctx: RequestContext[ServerSession, object, object] | None = None,
+) -> CommandResult | None:
     """Handle custom prompt execution."""
     custom_prompt = load_custom_prompt(command.namespace)
 
@@ -182,7 +207,10 @@ def handle_custom_prompt(command: ParsedCommand) -> CommandResult | None:
     return CommandResult(output=content)
 
 
-def handle_standard_instruction(command: ParsedCommand) -> CommandResult:
+def handle_standard_instruction(
+    command: ParsedCommand,
+    ctx: RequestContext[ServerSession, object, object] | None = None,
+) -> CommandResult:
     """Handle standard instruction lookup (fallback handler)."""
     instruction = load_instruction(command.namespace, command.subcommand)
 
@@ -209,17 +237,24 @@ COMMAND_HANDLERS: list[CommandHandler] = [
 ]
 
 
-def execute_command(command: ParsedCommand) -> str:
+async def execute_command(
+    command: ParsedCommand,
+    ctx: RequestContext[ServerSession, object, object] | None = None,
+) -> str:
     """Execute a command through the handler chain.
 
     Args:
         command: The parsed command to execute.
+        ctx: Optional MCP request context for session access.
 
     Returns:
         The command output.
     """
     for handler in COMMAND_HANDLERS:
-        result = handler(command)
+        result = handler(command, ctx)
+        # Handle async handlers
+        if asyncio.iscoroutine(result):
+            result = await result
         if result is not None:
             if result.display is not None:
                 # Quiet mode: show minimal display, full content in context block
@@ -230,5 +265,5 @@ def execute_command(command: ParsedCommand) -> str:
             return result.output
 
     # Fallback to standard instruction
-    fallback_result = handle_standard_instruction(command)
+    fallback_result = handle_standard_instruction(command, ctx)
     return fallback_result.output

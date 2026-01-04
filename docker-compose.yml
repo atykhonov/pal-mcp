@@ -7,6 +7,8 @@ services:
       - ./files:/app/files
       - ./prompts:/app/prompts
       - ./src:/app/src
+      - ~/.local/share/claude:/root/.local/share/claude:ro
+      - ~/.claude:/root/.claude
     environment:
       - PAL_SERVER_PORT=8090
       - PAL_LOG_LEVEL=INFO
@@ -14,6 +16,7 @@ services:
       - PAL_OAUTH_PUBLIC_URL=https://mcpv1.tail43545a.ts.net
       - PAL_MEILISEARCH_URL=http://host.docker.internal:7700
       - PAL_OLLAMA_URL=http://host.docker.internal:11434
+      - PAL_NOTES_AI_PROVIDER=pal-follow-up
       - PYTHONPATH=/app/src
     extra_hosts:
       - "host.docker.internal:host-gateway"

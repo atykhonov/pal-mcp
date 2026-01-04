@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import mcp.types as types
+from mcp.server.lowlevel.server import request_ctx
 
 from pal.instructions import list_available_commands
 from pal.tools.handlers import execute_command
@@ -91,7 +92,7 @@ def register_tools(server: Server) -> None:
         print(f"[TOOL] Executing {name}...")
 
         if name == "run_pal_command":
-            return _handle_run_command(arguments)
+            return await _handle_run_command(arguments)
 
         if name == "list_pal_commands":
             return _handle_list_commands()
@@ -99,7 +100,7 @@ def register_tools(server: Server) -> None:
         raise ValueError(f"Unknown tool: {name}")
 
 
-def _handle_run_command(
+async def _handle_run_command(
     arguments: dict[str, str],
 ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
     """Handle the run_pal_command tool.
@@ -110,6 +111,12 @@ def _handle_run_command(
     Returns:
         List of text content with the command results.
     """
+    # Get request context for MCP session access (e.g., sampling)
+    try:
+        ctx = request_ctx.get()
+    except LookupError:
+        ctx = None
+
     command_string = arguments.get("command", "").strip()
     pipeline = parse_pipeline(command_string)
 
@@ -120,7 +127,7 @@ def _handle_run_command(
 
     for raw_command in pipeline:
         parsed = parse_command(raw_command)
-        output = execute_command(parsed)
+        output = await execute_command(parsed, ctx)
         results.append(output)
 
     output_text = "\n\n---\n\n".join(results)

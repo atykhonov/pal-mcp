@@ -94,9 +94,17 @@ class Settings(BaseSettings):
 
     # Notes AI settings
     notes_ai_provider: Annotated[
-        Literal["ollama", "claude", "none"],
-        Field(description="AI provider for notes tag generation: 'ollama', 'claude', or 'none'"),
-    ] = "claude"
+        Literal["mcp-sampling", "ollama", "pal-follow-up", "none"],
+        Field(
+            description=(
+                "AI provider for notes tag generation: "
+                "'mcp-sampling' (uses connected client's LLM via MCP protocol - recommended), "
+                "'ollama' (local LLM), "
+                "'pal-follow-up' (prompts client LLM to run $$notes tags as follow-up), "
+                "or 'none' (keyword extraction only)"
+            )
+        ),
+    ] = "mcp-sampling"
 
     @property
     def oauth_allowed_cidrs(self) -> list[str]:
@@ -149,5 +157,9 @@ def setup_logging(settings: Settings | None = None) -> logging.Logger:
 
     logger = logging.getLogger("pal")
     logger.setLevel(getattr(logging, settings.log_level.upper()))
+
+    # Enable DEBUG logging for notes module (tag generation)
+    notes_logger = logging.getLogger("pal.tools.notes")
+    notes_logger.setLevel(logging.DEBUG)
 
     return logger
