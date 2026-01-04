@@ -104,7 +104,7 @@ class Settings(BaseSettings):
                 "or 'none' (keyword extraction only)"
             )
         ),
-    ] = "mcp-sampling"
+    ] = "pal-follow-up"
 
     @property
     def oauth_allowed_cidrs(self) -> list[str]:
