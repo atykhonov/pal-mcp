@@ -491,12 +491,20 @@ def _handle_list(meili_url: str, filter_tags: list[str] | None = None) -> Comman
         header += "\n"
         lines = [header]
         for note in results:
-            title = note.get("title", "Untitled")
+            # Clean up title - remove markdown headers and newlines for display
+            raw_title = note.get("title", "Untitled")
+            title = raw_title.replace("\\n", " ").replace("\n", " ").lstrip("# ").strip()
+            if len(title) > 60:
+                title = title[:57] + "..."
+
             tags = note.get("tags", [])
             created = note.get("created_at", "")[:10]
-            content = note.get("content", "")[:100]
+
+            # Clean up content preview
+            raw_content = note.get("content", "")
+            content = raw_content.replace("\\n", " ").replace("\n", " ")[:100]
             note_id = note.get("id", "")[:8]  # Short UUID
-            if len(note.get("content", "")) > 100:
+            if len(raw_content) > 100:
                 content += "..."
 
             tags_str = " ".join(f"`{t}`" for t in tags) if tags else ""
@@ -884,12 +892,20 @@ def _format_search_results(
 
     lines = [header]
     for hit in hits:
-        title = hit.get("title", "Untitled")
+        # Clean up title - remove markdown headers and newlines for display
+        raw_title = hit.get("title", "Untitled")
+        title = raw_title.replace("\\n", " ").replace("\n", " ").lstrip("# ").strip()
+        if len(title) > 60:
+            title = title[:57] + "..."
+
         tags = hit.get("tags", [])
         created = hit.get("created_at", "")[:10]
-        content = hit.get("content", "")[:100]
+
+        # Clean up content preview
+        raw_content = hit.get("content", "")
+        content = raw_content.replace("\\n", " ").replace("\n", " ")[:100]
         note_id = hit.get("id", "")[:8]  # Short UUID
-        if len(hit.get("content", "")) > 100:
+        if len(raw_content) > 100:
             content += "..."
 
         tags_str = " ".join(f"`{t}`" for t in tags) if tags else ""
