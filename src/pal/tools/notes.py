@@ -24,6 +24,76 @@ logger = logging.getLogger(__name__)
 
 # Timeout for Meilisearch requests
 REQUEST_TIMEOUT = 10.0
+TASK_POLL_INTERVAL = 0.1  # seconds between task status checks
+TASK_TIMEOUT = 5.0  # max seconds to wait for task completion
+
+
+def _check_ollama_health(ollama_url: str) -> tuple[bool, str]:
+    """Check if Ollama is accessible and has the embedding model.
+
+    Args:
+        ollama_url: Ollama URL.
+
+    Returns:
+        Tuple of (is_healthy, error_message).
+    """
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            # Check basic connectivity
+            response = client.get(f"{ollama_url}/api/tags")
+            response.raise_for_status()
+            data = response.json()
+
+            # Check if nomic-embed-text model is available
+            models = data.get("models", [])
+            model_names = [m.get("name", "").split(":")[0] for m in models]
+            if "nomic-embed-text" not in model_names:
+                return False, "Embedding model 'nomic-embed-text' not found in Ollama"
+
+            return True, ""
+    except httpx.ConnectError:
+        return False, "Cannot connect to Ollama"
+    except httpx.HTTPStatusError as e:
+        return False, f"Ollama returned error: {e}"
+    except Exception as e:
+        return False, f"Ollama health check failed: {e}"
+
+
+def _wait_for_task(meili_url: str, task_uid: int) -> bool:
+    """Wait for a Meilisearch task to complete.
+
+    Args:
+        meili_url: Meilisearch URL.
+        task_uid: The task UID to wait for.
+
+    Returns:
+        True if task succeeded, False otherwise.
+    """
+    import time
+
+    start_time = time.time()
+
+    with httpx.Client(timeout=REQUEST_TIMEOUT) as client:
+        while time.time() - start_time < TASK_TIMEOUT:
+            try:
+                response = client.get(f"{meili_url}/tasks/{task_uid}")
+                response.raise_for_status()
+                task = response.json()
+
+                status = task.get("status")
+                if status == "succeeded":
+                    return True
+                elif status in ("failed", "canceled"):
+                    logger.error(f"Meilisearch task {task_uid} {status}: {task.get('error')}")
+                    return False
+                # Still processing (enqueued or processing)
+                time.sleep(TASK_POLL_INTERVAL)
+            except Exception as e:
+                logger.warning(f"Error checking task status: {e}")
+                time.sleep(TASK_POLL_INTERVAL)
+
+    logger.warning(f"Task {task_uid} timed out after {TASK_TIMEOUT}s")
+    return False
 
 
 async def handle_notes(
@@ -344,6 +414,18 @@ async def _handle_add(
     if not input_text:
         return CommandResult(output="## $$notes add\n\nError: No content provided.")
 
+    # Check Ollama health before adding (required for embeddings)
+    ollama_ok, ollama_error = _check_ollama_health(ollama_url)
+    if not ollama_ok:
+        return CommandResult(
+            output=(
+                "## $$notes add\n\n"
+                f"Error: {ollama_error}\n\n"
+                "Ollama must be running for AI embeddings. Start it with:\n"
+                "```\ndocker compose --profile notes up -d ollama\n```"
+            )
+        )
+
     # Parse tags using shared helper
     user_tags, content = _parse_tag_filter(input_text)
 
@@ -414,6 +496,19 @@ async def _handle_add(
                 headers={"Content-Type": "application/json"},
             )
             response.raise_for_status()
+            task_response = response.json()
+
+        # Wait for the indexing task to complete
+        task_uid = task_response.get("taskUid")
+        if task_uid is not None:
+            if not _wait_for_task(meili_url, task_uid):
+                return CommandResult(
+                    output=(
+                        "## $$notes add\n\n"
+                        "Error: Note indexing failed or timed out. "
+                        "The note may not be immediately searchable."
+                    )
+                )
 
         tags_str = ", ".join(f"`{t}`" for t in all_tags) if all_tags else "none"
 
@@ -441,7 +536,7 @@ async def _handle_add(
                 "## $$notes add\n\n"
                 "Error: Could not connect to Meilisearch.\n\n"
                 "Make sure Meilisearch is running:\n"
-                "```\ncd /home/andrii/projects/notes-search && docker compose up -d\n```"
+                "```\ndocker compose --profile notes up -d\n```"
             )
         )
     except httpx.HTTPStatusError as e:
@@ -521,7 +616,7 @@ def _handle_list(meili_url: str, filter_tags: list[str] | None = None) -> Comman
                 "## $$notes list\n\n"
                 "Error: Could not connect to Meilisearch.\n\n"
                 "Make sure Meilisearch is running:\n"
-                "```\ncd /home/andrii/projects/notes-search && docker compose up -d\n```"
+                "```\ndocker compose --profile notes up -d\n```"
             )
         )
     except httpx.HTTPStatusError as e:
@@ -566,7 +661,7 @@ def _handle_search(
                 "## $$notes search\n\n"
                 "Error: Could not connect to Meilisearch.\n\n"
                 "Make sure Meilisearch is running:\n"
-                "```\ncd /home/andrii/projects/notes-search && docker compose up -d\n```"
+                "```\ndocker compose --profile notes up -d\n```"
             )
         )
     except httpx.HTTPStatusError as e:
@@ -615,7 +710,7 @@ def _handle_ai_search(
                 "## $$notes ai\n\n"
                 "Error: Could not connect to Meilisearch.\n\n"
                 "Make sure Meilisearch is running:\n"
-                "```\ncd /home/andrii/projects/notes-search && docker compose up -d\n```"
+                "```\ndocker compose --profile notes up -d\n```"
             )
         )
     except httpx.HTTPStatusError as e:
@@ -786,6 +881,18 @@ def _handle_tags(meili_url: str, input_text: str) -> CommandResult:
                 headers={"Content-Type": "application/json"},
             )
             response.raise_for_status()
+            task_response = response.json()
+
+        # Wait for the update task to complete
+        task_uid = task_response.get("taskUid")
+        if task_uid is not None:
+            if not _wait_for_task(meili_url, task_uid):
+                return CommandResult(
+                    output=(
+                        "## $$notes tags\n\n"
+                        "Error: Tag update failed or timed out."
+                    )
+                )
 
         old_tags_str = ", ".join(f"`{t}`" for t in old_tags) if old_tags else "none"
         new_tags_str = ", ".join(f"`{t}`" for t in new_tags)
@@ -805,7 +912,7 @@ def _handle_tags(meili_url: str, input_text: str) -> CommandResult:
                 "## $$notes tags\n\n"
                 "Error: Could not connect to Meilisearch.\n\n"
                 "Make sure Meilisearch is running:\n"
-                "```\ncd /home/andrii/projects/notes-search && docker compose up -d\n```"
+                "```\ndocker compose --profile notes up -d\n```"
             )
         )
     except httpx.HTTPStatusError as e:
@@ -844,6 +951,18 @@ def _handle_delete(meili_url: str, note_id: str) -> CommandResult:
                 headers={"Content-Type": "application/json"},
             )
             response.raise_for_status()
+            task_response = response.json()
+
+        # Wait for the delete task to complete
+        task_uid = task_response.get("taskUid")
+        if task_uid is not None:
+            if not _wait_for_task(meili_url, task_uid):
+                return CommandResult(
+                    output=(
+                        "## $$notes delete\n\n"
+                        "Error: Note deletion failed or timed out."
+                    )
+                )
 
         return CommandResult(
             output=(
@@ -859,7 +978,7 @@ def _handle_delete(meili_url: str, note_id: str) -> CommandResult:
                 "## $$notes delete\n\n"
                 "Error: Could not connect to Meilisearch.\n\n"
                 "Make sure Meilisearch is running:\n"
-                "```\ncd /home/andrii/projects/notes-search && docker compose up -d\n```"
+                "```\ndocker compose --profile notes up -d\n```"
             )
         )
     except httpx.HTTPStatusError as e:
