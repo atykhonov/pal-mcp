@@ -25,19 +25,51 @@ class TestParsePipeline:
 
     def test_whitespace_handling(self) -> None:
         """Whitespace around pipes is trimmed."""
-        result = parse_pipeline("  cmd1  |  cmd2  |  cmd3  ")
+        result = parse_pipeline("  cmd1 | cmd2 | cmd3  ")
         assert result == ["cmd1", "cmd2", "cmd3"]
 
-    def test_empty_segments_ignored(self) -> None:
-        """Empty segments are ignored."""
-        result = parse_pipeline("cmd1 || cmd2")
-        assert result == ["cmd1", "cmd2"]
+    def test_markdown_table_not_split(self) -> None:
+        """Markdown tables (starting/ending with |) are not split."""
+        result = parse_pipeline("| col1 | col2 |")
+        assert result == ["| col1 | col2 |"]
 
-    def test_pipe_in_quotes_not_supported(self) -> None:
-        """Pipes are always split (no quote handling)."""
-        # This is expected behavior - no quote handling
-        result = parse_pipeline("echo 'hello | world'")
-        assert len(result) == 2
+    def test_markdown_table_row_not_split(self) -> None:
+        """Markdown table rows with data are not split."""
+        result = parse_pipeline("| 7a8bd1a1 | This is a test | tags |")
+        assert result == ["| 7a8bd1a1 | This is a test | tags |"]
+
+    def test_pipe_in_content_preserved(self) -> None:
+        """Pipe characters without spaces are preserved."""
+        result = parse_pipeline("echo hello|world")
+        assert result == ["echo hello|world"]
+
+    def test_notes_add_no_pipe_split(self) -> None:
+        """notes add is content-consuming - pipes are part of content."""
+        content = "notes add # Title\n\n| Code | Meaning |\n| 200 | OK |"
+        result = parse_pipeline(content)
+        assert result == [content]
+
+    def test_notes_add_with_table_content(self) -> None:
+        """notes add preserves markdown tables with multiple pipes."""
+        content = "notes add Some text\n\nCode | Meaning | Description\n200 | OK | Success"
+        result = parse_pipeline(content)
+        assert result == [content]
+
+    def test_notes_save_no_pipe_split(self) -> None:
+        """notes save is content-consuming - pipes are part of content."""
+        content = "notes save # Article with | pipes | everywhere"
+        result = parse_pipeline(content)
+        assert result == [content]
+
+    def test_regular_pipeline_still_works(self) -> None:
+        """Regular commands still support pipeline."""
+        result = parse_pipeline("git commit | review")
+        assert result == ["git commit", "review"]
+
+    def test_three_command_pipeline(self) -> None:
+        """Three-command pipelines work for regular commands."""
+        result = parse_pipeline("cmd1 | cmd2 | cmd3")
+        assert result == ["cmd1", "cmd2", "cmd3"]
 
 
 class TestParseCommand:
