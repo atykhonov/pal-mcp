@@ -59,7 +59,7 @@ services:
     volumes:
       - ./data/meilisearch:/source:ro
       - ./data/meilisearch-backups:/backups
-      - ./scripts/meilisearch-backup.sh:/backup.sh:ro
+      - ./bin/meilisearch-backup.sh:/backup.sh:ro
     environment:
       - BACKUP_KEEP=20
       - BACKUP_CRON=0 2 * * *
