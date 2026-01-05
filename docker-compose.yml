@@ -30,7 +30,7 @@ services:
     ports:
       - "7700:7700"
     volumes:
-      - ./data/meilisearch:/meili_data
+      - ${PAL_DATA_DIR:-./data}/meilisearch:/meili_data
     environment:
       - MEILI_ENV=development
       - MEILI_NO_ANALYTICS=true
@@ -43,7 +43,7 @@ services:
     ports:
       - "11434:11434"
     volumes:
-      - ./data/ollama:/root/.ollama
+      - ${PAL_DATA_DIR:-./data}/ollama:/root/.ollama
     restart: unless-stopped
 
   meilisearch-ui:
@@ -57,8 +57,8 @@ services:
     image: alpine:latest
     profiles: ["notes"]
     volumes:
-      - ./data/meilisearch:/source:ro
-      - ./data/meilisearch-backups:/backups
+      - ${PAL_DATA_DIR:-./data}/meilisearch:/source:ro
+      - ${PAL_DATA_DIR:-./data}/meilisearch-backups:/backups
       - ./bin/meilisearch-backup.sh:/backup.sh:ro
     environment:
       - BACKUP_KEEP=20
