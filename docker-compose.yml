@@ -52,3 +52,33 @@ services:
     ports:
       - "24900:24900"
     restart: unless-stopped
+
+  meilisearch-backup:
+    image: alpine:latest
+    profiles: ["notes"]
+    volumes:
+      - ./data/meilisearch:/source:ro
+      - ./data/meilisearch-backups:/backups
+      - ./scripts/meilisearch-backup.sh:/backup.sh:ro
+    environment:
+      - BACKUP_KEEP=20
+      - BACKUP_CRON=0 2 * * *
+      - SOURCE_DIR=/source
+      - BACKUP_DIR=/backups
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        apk add --no-cache dcron
+
+        # Run initial backup on startup
+        /backup.sh
+
+        # Setup cron job
+        echo "$$BACKUP_CRON /backup.sh >> /var/log/backup.log 2>&1" > /etc/crontabs/root
+
+        echo "Backup service started. Schedule: $$BACKUP_CRON (keeping last $$BACKUP_KEEP backups)"
+
+        # Run cron in foreground
+        crond -f -l 2
+    restart: unless-stopped
