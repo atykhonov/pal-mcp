@@ -28,6 +28,32 @@ TASK_POLL_INTERVAL = 0.1  # seconds between task status checks
 TASK_TIMEOUT = 5.0  # max seconds to wait for task completion
 
 
+def _should_wait_for_tasks() -> bool:
+    """Check if we should wait for Meilisearch tasks to complete."""
+    return os.getenv("PAL_NOTES_WAIT_FOR_TASKS", "false").lower() in ("true", "1", "yes")
+
+
+def _maybe_wait_for_task(meili_url: str, task_response: dict, error_msg: str) -> CommandResult | None:
+    """Optionally wait for a Meilisearch task and return error if it fails.
+
+    Args:
+        meili_url: Meilisearch URL.
+        task_response: Response from Meilisearch containing taskUid.
+        error_msg: Error message to show if task fails.
+
+    Returns:
+        CommandResult with error if task failed, None otherwise.
+    """
+    if not _should_wait_for_tasks():
+        return None
+
+    task_uid = task_response.get("taskUid")
+    if task_uid is not None and not _wait_for_task(meili_url, task_uid):
+        return CommandResult(output=error_msg)
+
+    return None
+
+
 def _check_ollama_health(ollama_url: str) -> tuple[bool, str]:
     """Check if Ollama is accessible and has the embedding model.
 
@@ -498,17 +524,14 @@ async def _handle_add(
             response.raise_for_status()
             task_response = response.json()
 
-        # Wait for the indexing task to complete
-        task_uid = task_response.get("taskUid")
-        if task_uid is not None:
-            if not _wait_for_task(meili_url, task_uid):
-                return CommandResult(
-                    output=(
-                        "## $$notes add\n\n"
-                        "Error: Note indexing failed or timed out. "
-                        "The note may not be immediately searchable."
-                    )
-                )
+        # Optionally wait for the indexing task to complete
+        if error := _maybe_wait_for_task(
+            meili_url,
+            task_response,
+            "## $$notes add\n\nError: Note indexing failed or timed out. "
+            "The note may not be immediately searchable.",
+        ):
+            return error
 
         tags_str = ", ".join(f"`{t}`" for t in all_tags) if all_tags else "none"
 
@@ -883,16 +906,13 @@ def _handle_tags(meili_url: str, input_text: str) -> CommandResult:
             response.raise_for_status()
             task_response = response.json()
 
-        # Wait for the update task to complete
-        task_uid = task_response.get("taskUid")
-        if task_uid is not None:
-            if not _wait_for_task(meili_url, task_uid):
-                return CommandResult(
-                    output=(
-                        "## $$notes tags\n\n"
-                        "Error: Tag update failed or timed out."
-                    )
-                )
+        # Optionally wait for the update task to complete
+        if error := _maybe_wait_for_task(
+            meili_url,
+            task_response,
+            "## $$notes tags\n\nError: Tag update failed or timed out.",
+        ):
+            return error
 
         old_tags_str = ", ".join(f"`{t}`" for t in old_tags) if old_tags else "none"
         new_tags_str = ", ".join(f"`{t}`" for t in new_tags)
@@ -953,16 +973,13 @@ def _handle_delete(meili_url: str, note_id: str) -> CommandResult:
             response.raise_for_status()
             task_response = response.json()
 
-        # Wait for the delete task to complete
-        task_uid = task_response.get("taskUid")
-        if task_uid is not None:
-            if not _wait_for_task(meili_url, task_uid):
-                return CommandResult(
-                    output=(
-                        "## $$notes delete\n\n"
-                        "Error: Note deletion failed or timed out."
-                    )
-                )
+        # Optionally wait for the delete task to complete
+        if error := _maybe_wait_for_task(
+            meili_url,
+            task_response,
+            "## $$notes delete\n\nError: Note deletion failed or timed out.",
+        ):
+            return error
 
         return CommandResult(
             output=(
