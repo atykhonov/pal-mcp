@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from pal.config import get_settings
 from pal.instructions import (
     get_prompt_path,
     list_custom_prompts,
@@ -14,7 +13,6 @@ from pal.instructions import (
     load_instruction,
     save_custom_prompt,
 )
-from pal.tools.notes import handle_notes
 from pal.tools.parser import ParsedCommand
 from pal.tools.types import CommandHandler, CommandResult
 
@@ -31,10 +29,8 @@ BUILTIN_COMMANDS: dict[str, str] = {
     "help": "Show all available commands",
 }
 
-# Optional commands (shown only when enabled)
-OPTIONAL_COMMANDS: dict[str, str] = {
-    "notes": "Manage notes with Meilisearch (add, list, search, ai)",
-}
+# Notes commands are handled via instruction files + curl tool
+# They appear in help via DEFAULT_INSTRUCTIONS["notes"]
 
 # Default commands from DEFAULT_INSTRUCTIONS (loaded from files/defaults)
 DEFAULT_COMMANDS: dict[str, str] = {
@@ -130,7 +126,6 @@ def handle_help_command(
     if command.namespace != "help":
         return None
 
-    settings = get_settings()
     lines: list[str] = ["## $$help", ""]
 
     # Section 1: Pre-defined commands
@@ -141,14 +136,12 @@ def handle_help_command(
     for cmd, desc in sorted(BUILTIN_COMMANDS.items()):
         lines.append(f"- `$${cmd}` - {desc}")
 
-    # Optional commands (when enabled)
-    if settings.notes_enabled:
-        for cmd, desc in sorted(OPTIONAL_COMMANDS.items()):
-            lines.append(f"- `$${cmd}` - {desc}")
-
     # Default commands from DEFAULT_INSTRUCTIONS
     for cmd, desc in sorted(DEFAULT_COMMANDS.items()):
         lines.append(f"- `$${cmd}` - {desc}")
+
+    # Notes commands (available via instruction files + curl)
+    lines.append(f"- `$$notes` - Manage notes (list, add, search, ai)")
 
     lines.append("")
 
@@ -218,32 +211,6 @@ def handle_custom_prompt(
     return CommandResult(output=content)
 
 
-async def handle_notes_if_enabled(
-    command: ParsedCommand,
-    ctx: RequestContext[ServerSession, object, object] | None = None,
-) -> CommandResult | None:
-    """Handle notes command only if the feature is enabled."""
-    if command.namespace != "notes":
-        return None
-
-    settings = get_settings()
-    if not settings.notes_enabled:
-        return CommandResult(
-            output=(
-                "## $$notes\n\n"
-                "The notes feature is not enabled.\n\n"
-                "To enable, set `PAL_NOTES_ENABLED=true` and ensure Meilisearch is running.\n\n"
-                "Quick start:\n"
-                "```bash\n"
-                "docker compose --profile notes up -d\n"
-                "./scripts/setup-notes.sh\n"
-                "```"
-            )
-        )
-
-    return await handle_notes(command, ctx)
-
-
 def handle_standard_instruction(
     command: ParsedCommand,
     ctx: RequestContext[ServerSession, object, object] | None = None,
@@ -263,13 +230,13 @@ def handle_standard_instruction(
 
 
 # Ordered list of handlers to try
+# Notes commands are handled via instruction files + curl tool (not hardcoded handlers)
 COMMAND_HANDLERS: list[CommandHandler] = [
     handle_echo,
     handle_lorem_ipsum,
     handle_prompt,
     handle_help_command,
     handle_help,
-    handle_notes_if_enabled,
     handle_custom_prompt,
 ]
 
