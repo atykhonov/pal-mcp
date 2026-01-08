@@ -45,8 +45,8 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
-# Custom prompts (user-specific)
-prompts/
+# Custom prompts (user-specific, root level only)
+/prompts/
 
 # Local settings
 .claude/
