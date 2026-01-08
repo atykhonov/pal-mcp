@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from pal.prompts import (
     get_prompt_path,
+    list_builtin_prompts,
     list_custom_prompts,
     list_subcommands,
     load_custom_prompt,
@@ -29,13 +30,6 @@ BUILTIN_COMMANDS: dict[str, str] = {
     "help": "Show all available commands",
 }
 
-# Notes commands are handled via prompt files + curl tool
-# They appear in help via DEFAULT_PROMPTS["notes"]
-
-# Default commands from DEFAULT_PROMPTS (loaded from files/defaults)
-DEFAULT_COMMANDS: dict[str, str] = {
-    "git commit": "Create a git commit with conventional format",
-}
 
 
 def handle_echo(
@@ -115,20 +109,22 @@ def handle_help_command(
 
     lines: list[str] = ["## $$help", ""]
 
+    lines.append("Use `$$` to run commands (e.g., `$$notes list`).")
+    lines.append("In pipes, only the first command needs `$$`.")
+    lines.append("")
+
     # Section 1: Built-in commands (Python handlers)
     lines.append("### Built-in Commands")
     lines.append("")
     for cmd, desc in sorted(BUILTIN_COMMANDS.items()):
-        lines.append(f"- `$${cmd}` - {desc}")
+        lines.append(f"- `{cmd}` - {desc}")
     lines.append("")
 
     # Section 2: Built-in prompts (bundled .md files)
     lines.append("### Built-in Prompts")
     lines.append("")
-    lines.append("- `$$lorem-ipsum` - Generate Lorem ipsum placeholder text")
-    for cmd, desc in sorted(DEFAULT_COMMANDS.items()):
-        lines.append(f"- `$${cmd}` - {desc}")
-    lines.append("- `$$notes` - Manage notes (list, add, search, ai)")
+    for name, desc, _subcommands in list_builtin_prompts():
+        lines.append(f"- `{name}` - {desc}")
     lines.append("")
 
     # Section 3: Custom prompts
@@ -138,7 +134,7 @@ def handle_help_command(
     custom_prompts = list_custom_prompts()
     if custom_prompts:
         for prompt_name in custom_prompts:
-            lines.append(f"- `$${prompt_name}`")
+            lines.append(f"- `{prompt_name}`")
     else:
         lines.append("No custom prompts defined yet.")
         lines.append("")
