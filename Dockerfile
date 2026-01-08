@@ -13,7 +13,6 @@ RUN pip install --no-cache-dir .
 
 # Copy runtime files
 COPY files/ files/
-COPY prompts/ prompts/
 
 # Set environment variables
 ENV PAL_SERVER_HOST=0.0.0.0

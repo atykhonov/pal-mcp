@@ -15,7 +15,7 @@ from mcp.server.streamable_http import StreamableHTTPServerTransport
 from mcp.server.stdio import stdio_server
 
 from pal.config import Settings, get_settings, setup_logging
-from pal.instructions import ensure_defaults
+from pal.prompts import ensure_defaults
 from pal.oauth import get_oauth_manager
 from pal.tools import register_tools
 
@@ -25,13 +25,17 @@ Receive = Any
 Send = Any
 
 
+# Server instructions sent to clients during MCP initialization
+SERVER_INSTRUCTIONS = "When you see $$ at the start of user input, call run_pal_command with the command text."
+
+
 def create_server() -> Server:
     """Create and configure the MCP server.
 
     Returns:
         Configured MCP server instance.
     """
-    server = Server("pal-server")
+    server = Server("pal-server", instructions=SERVER_INSTRUCTIONS)
     register_tools(server)
     return server
 

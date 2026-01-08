@@ -10,7 +10,7 @@ An MCP (Model Context Protocol) server for custom commands and prompt management
 - **Variable Substitution**: Use `$MSG`, `$REPLY`, and heading-based variables
 - **Notes**: Full-text searchable notes with AI-powered tagging (requires Meilisearch)
 - **OAuth 2.0**: Secure authentication with PKCE for external connections
-- **Extensible**: Add custom instructions via filesystem or built-in defaults
+- **Extensible**: Add custom prompts via filesystem or built-in defaults
 
 ## Installation
 
@@ -59,9 +59,8 @@ PAL uses environment variables for configuration. You can also use a `.env` file
 | `PAL_TRANSPORT` | `sse` | Transport type: `sse` or `stdio` |
 | `PAL_SERVER_PORT` | `8090` | Server port |
 | `PAL_SERVER_HOST` | `0.0.0.0` | Server host |
-| `PAL_INSTRUCTIONS_DIR` | `~/.mcp-commands` | Directory for instruction files |
-| `PAL_FILES_DIR` | `~/.mcp-commands/files` | Directory for static files |
-| `PAL_PROMPTS_DIR` | `./prompts` | Directory for custom prompts |
+| `PAL_PROMPTS_DIR` | `~/.pal-mcp-prompts` | Directory for prompt files |
+| `PAL_FILES_DIR` | `~/.pal-mcp-prompts/files` | Directory for static files |
 | `PAL_LOG_LEVEL` | `INFO` | Logging level |
 | `PAL_SSL_CERTFILE` | - | Path to SSL certificate file |
 | `PAL_SSL_KEYFILE` | - | Path to SSL key file |
@@ -150,18 +149,17 @@ pal-mcp/
 │   ├── config.py               # Configuration (pydantic-settings)
 │   ├── server.py               # MCP server with OAuth 2.0
 │   ├── auth.py                 # OAuth 2.1 manager
-│   ├── instructions/           # Instruction management
+│   ├── prompts/                # Prompt management
 │   │   ├── __init__.py
-│   │   ├── defaults.py         # Default instructions
-│   │   └── loader.py           # Instruction loading
+│   │   ├── defaults.py         # Default prompts
+│   │   └── loader.py           # Prompt loading
 │   └── tools/                  # MCP tools
 │       ├── __init__.py
 │       ├── handlers.py         # Command handlers
 │       ├── parser.py           # Command parsing
 │       ├── registry.py         # Tool registration
-│       └── notes.py            # Notes commands (Meilisearch)
+│       └── curl.py             # Curl tool for HTTP requests
 ├── tests/                      # Test suite
-├── prompts/                    # Custom prompts directory
 ├── pyproject.toml              # Project configuration
 ├── Dockerfile
 └── docker-compose.yml          # Includes Meilisearch & Ollama
@@ -202,27 +200,23 @@ ruff check src tests
 mypy src
 ```
 
-## Adding Custom Instructions
+## Adding Custom Prompts
 
 ### Via Filesystem
 
-Create `.md` files in `~/.mcp-commands/`:
+Create `.md` files in `~/.pal-mcp-prompts/`:
 
 ```bash
-# Flat command: ~/.mcp-commands/mycommand.md
-echo "Your instruction here" > ~/.mcp-commands/mycommand.md
+# Flat command: ~/.pal-mcp-prompts/mycommand.md
+echo "Your prompt here" > ~/.pal-mcp-prompts/mycommand.md
 
-# Nested command: ~/.mcp-commands/namespace/subcommand.md
-mkdir -p ~/.mcp-commands/git
-echo "Git commit instructions" > ~/.mcp-commands/git/commit.md
-```
+# Nested command: ~/.pal-mcp-prompts/namespace/subcommand.md
+mkdir -p ~/.pal-mcp-prompts/git
+echo "Git commit prompt" > ~/.pal-mcp-prompts/git/commit.md
 
-### Via Prompts Directory
-
-Create `.md` files in the `prompts/` directory of the project:
-
-```bash
-echo "Translate to Spanish:" > prompts/es.md
+# Custom user prompts: ~/.pal-mcp-prompts/custom/
+mkdir -p ~/.pal-mcp-prompts/custom
+echo "Translate to Spanish:" > ~/.pal-mcp-prompts/custom/es.md
 ```
 
 ## API Endpoints

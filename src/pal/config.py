@@ -37,17 +37,13 @@ class Settings(BaseSettings):
         Path | None, Field(description="Path to SSL key file")
     ] = None
 
-    instructions_dir: Annotated[
-        Path, Field(description="Directory for instruction files")
-    ] = Path("~/.mcp-commands")
+    prompts_dir: Annotated[
+        Path, Field(description="Directory for prompt files")
+    ] = Path("~/.pal-mcp-prompts")
 
     files_dir: Annotated[Path, Field(description="Directory for static files")] = Path(
-        "~/.mcp-commands/files"
+        "~/.pal-mcp-prompts/files"
     )
-
-    prompts_dir: Annotated[
-        Path | None, Field(description="Directory for custom prompts")
-    ] = None
 
     log_level: Annotated[str, Field(description="Logging level")] = "INFO"
 
@@ -117,31 +113,25 @@ class Settings(BaseSettings):
         return [cidr.strip() for cidr in self.oauth_allowed_networks.split(",") if cidr.strip()]
 
     @property
-    def instructions_path(self) -> Path:
-        """Get expanded instructions directory path."""
-        return self.instructions_dir.expanduser()
+    def prompts_path(self) -> Path:
+        """Get expanded prompts directory path."""
+        return self.prompts_dir.expanduser()
+
+    @property
+    def custom_prompts_path(self) -> Path:
+        """Get custom prompts directory path (subdirectory of prompts_path)."""
+        return self.prompts_path / "custom"
 
     @property
     def files_path(self) -> Path:
         """Get expanded files directory path."""
         return self.files_dir.expanduser()
 
-    @property
-    def prompts_path(self) -> Path:
-        """Get prompts directory path.
-
-        Uses prompts_dir if set, otherwise defaults to project-level prompts directory.
-        """
-        if self.prompts_dir is not None:
-            return self.prompts_dir.expanduser()
-        # Default: Use the project-level prompts directory
-        return Path(__file__).parent.parent.parent / "prompts"
-
     def ensure_directories(self) -> None:
         """Create required directories if they don't exist."""
-        self.instructions_path.mkdir(parents=True, exist_ok=True)
-        self.files_path.mkdir(parents=True, exist_ok=True)
         self.prompts_path.mkdir(parents=True, exist_ok=True)
+        self.custom_prompts_path.mkdir(parents=True, exist_ok=True)
+        self.files_path.mkdir(parents=True, exist_ok=True)
 
 
 @lru_cache

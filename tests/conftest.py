@@ -22,9 +22,8 @@ def temp_dir() -> Generator[Path, None, None]:
 def test_settings(temp_dir: Path) -> Settings:
     """Create test settings with temporary directories."""
     return Settings(
-        instructions_dir=temp_dir / "instructions",
-        files_dir=temp_dir / "files",
         prompts_dir=temp_dir / "prompts",
+        files_dir=temp_dir / "files",
         log_level="DEBUG",
     )
 

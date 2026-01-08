@@ -25,6 +25,8 @@ wheels/
 .venv/
 venv/
 ENV/
+.env-prod
+.env-test
 
 # IDE
 .idea/
