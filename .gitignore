@@ -56,3 +56,4 @@ certs/
 
 # Notes data (Meilisearch, Ollama)
 data/
+data-test/
