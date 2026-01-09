@@ -7,7 +7,7 @@ An MCP (Model Context Protocol) server for custom commands and prompt management
 - **Custom Commands**: Define and execute custom prompts with `$$command` syntax
 - **Command Pipelines**: Chain commands with `|` operator (`$$cmd1 | cmd2`)
 - **Prompt Management**: Create, view, and manage custom prompts
-- **Variable Substitution**: Use `$MSG`, `$REPLY`, `$REPLIES`, and heading-based variables
+- **Variable Substitution**: Use `$MSG`, `$REPLY`, `$REPLY1`..`$REPLYN`, `$REPLIES`, and heading-based variables
 - **Notes**: Full-text searchable notes with AI-powered tagging (requires Meilisearch)
 - **OAuth 2.0**: Secure authentication with PKCE for external connections
 - **Extensible**: Add custom prompts via filesystem or built-in defaults
@@ -137,6 +137,7 @@ The LLM automatically substitutes these variables before calling commands:
 
 - `$MSG` - The user's previous message
 - `$REPLY` - The LLM's previous response
+- `$REPLY1`, `$REPLY2`, ... - Older responses (1 back, 2 back, etc.)
 - `$REPLIES` - All the LLM's previous responses (concatenated)
 - `$HEADING_NAME` - Content under `## Heading Name` in previous response
 
