@@ -8,6 +8,7 @@ An MCP (Model Context Protocol) server for custom commands and prompt management
 - **Command Pipelines**: Chain commands with `|` operator (`$$cmd1 | cmd2`)
 - **Prompt Management**: Create, view, and manage custom prompts
 - **Variable Substitution**: Use `$MSG`, `$REPLY`, `$REPLY1`..`$REPLYN`, `$REPLIES`, and heading-based variables
+- **Tagging**: Tag and retrieve content within conversation sessions (requires Meilisearch)
 - **Notes**: Full-text searchable notes with AI-powered tagging (requires Meilisearch)
 - **OAuth 2.0**: Secure authentication with PKCE for external connections
 - **Extensible**: Add custom prompts via filesystem or built-in defaults
@@ -140,6 +141,20 @@ The LLM automatically substitutes these variables before calling commands:
 - `$REPLY1`, `$REPLY2`, ... - Older responses (1 back, 2 back, etc.)
 - `$REPLIES` - All the LLM's previous responses (concatenated)
 - `$HEADING_NAME` - Content under `## Heading Name` in previous response
+
+### Tagging Content
+
+Tag and retrieve content within a conversation session:
+
+| Command | Description |
+|---------|-------------|
+| `$$session` | Show or initialize session UUID |
+| `$$tag tag1,tag2 [content]` | Tag content (defaults to $REPLY) |
+| `$$tags <tag>` | Get items by tag |
+| `$$tags list` | List tagged items |
+| `$$tags search "query"` | Search tagged content |
+
+Tags are scoped to a conversation using an LLM-generated SESSION_UUID. The LLM generates this UUID on first use of `$$tag` or `$$session` and remembers it throughout the conversation.
 
 ## Project Structure
 

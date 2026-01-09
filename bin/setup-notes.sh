@@ -41,7 +41,14 @@ echo "Creating notes index..."
 curl -s -X POST "$MEILI_URL/indexes" \
     -H 'Content-Type: application/json' \
     -d '{"uid": "notes", "primaryKey": "id"}' > /dev/null
-echo "✓ Index created"
+echo "✓ Notes index created"
+
+# Create the tags index
+echo "Creating tags index..."
+curl -s -X POST "$MEILI_URL/indexes" \
+    -H 'Content-Type: application/json' \
+    -d '{"uid": "tags", "primaryKey": "id"}' > /dev/null
+echo "✓ Tags index created"
 
 # Enable vector store experimental feature
 echo "Enabling vector store feature..."
@@ -50,8 +57,8 @@ curl -s -X PATCH "$MEILI_URL/experimental-features" \
     -d '{"vectorStore": true}' > /dev/null
 echo "✓ Vector store enabled"
 
-# Configure searchable attributes
-echo "Configuring searchable attributes..."
+# Configure notes searchable attributes
+echo "Configuring notes index settings..."
 curl -s -X PATCH "$MEILI_URL/indexes/notes/settings" \
     -H 'Content-Type: application/json' \
     -d '{
@@ -59,7 +66,18 @@ curl -s -X PATCH "$MEILI_URL/indexes/notes/settings" \
         "sortableAttributes": ["created_at"],
         "filterableAttributes": ["tags", "created_at"]
     }' > /dev/null
-echo "✓ Searchable attributes configured"
+echo "✓ Notes index configured"
+
+# Configure tags index settings
+echo "Configuring tags index settings..."
+curl -s -X PATCH "$MEILI_URL/indexes/tags/settings" \
+    -H 'Content-Type: application/json' \
+    -d '{
+        "searchableAttributes": ["id", "content", "tags"],
+        "sortableAttributes": ["created_at"],
+        "filterableAttributes": ["tags", "session_id", "created_at"]
+    }' > /dev/null
+echo "✓ Tags index configured"
 
 # Configure embeddings for AI search (using REST source for Ollama compatibility)
 echo "Configuring embeddings (hybrid search)..."
@@ -86,5 +104,11 @@ echo "  \$\$notes add -t tag1,tag2 <text> - Add with tags"
 echo "  \$\$notes list                    - List recent notes"
 echo "  \$\$notes search \"query\"          - Text search"
 echo "  \$\$notes ai \"query\"              - AI semantic search"
+echo ""
+echo "And the tags commands (session-scoped):"
+echo "  \$\$tag tag1,tag2 [content]       - Tag content (defaults to \$REPLY)"
+echo "  \$\$tags <tag>                    - Get items by tag"
+echo "  \$\$tags list                     - List tagged items"
+echo "  \$\$tags search \"query\"           - Search tagged content"
 echo ""
 echo "Web UI available at: http://localhost:24900"
