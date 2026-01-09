@@ -17,6 +17,7 @@ These commands execute directly and return results:
 Available variables:
 - `$MSG` - User's previous message
 - `$REPLY` - Your previous response
+- `$REPLIES` - All your previous responses (concatenated)
 - Heading variables: `## Summary` creates `$SUMMARY`
 
 ## Pipeline Operators
