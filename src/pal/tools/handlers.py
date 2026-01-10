@@ -11,6 +11,7 @@ from pal.prompts import (
     list_custom_prompts,
     list_subcommands,
     load_custom_prompt,
+    load_merged_prompt,
     load_prompt,
     parse_frontmatter,
     save_custom_prompt,
@@ -49,17 +50,27 @@ def handle_prompt(
     """Handle the prompt command for managing custom prompts.
 
     Usage:
-        $$prompt           - List all custom prompts
-        $$prompt name      - View prompt definition
-        $$prompt name text - Create/update prompt with text
+        $$prompt                         - List all custom prompts
+        $$prompt name                    - View prompt definition
+        $$prompt name -- content         - Create/update prompt with content
+
+    Namespaced prompts create directory structure:
+        $$prompt git add -- content      -> git/add.md
+        $$prompt foo bar baz -- content  -> foo/bar/baz.md
     """
     if command.namespace != "prompt":
         return None
 
-    # Parse arguments from rest
-    parts = command.rest.split(None, 1) if command.rest else []
-    prompt_name = parts[0] if parts else None
-    prompt_content = parts[1] if len(parts) > 1 else None
+    # Parse using " -- " as delimiter between name and content
+    if not command.rest:
+        prompt_name = None
+        prompt_content = None
+    elif " -- " in command.rest:
+        name_part, prompt_content = command.rest.split(" -- ", 1)
+        prompt_name = name_part.strip() if name_part.strip() else None
+    else:
+        prompt_name = command.rest.strip() if command.rest.strip() else None
+        prompt_content = None
 
     if not prompt_name:
         # List all custom prompts
@@ -89,7 +100,7 @@ def handle_prompt(
                 f"## $$prompt {prompt_name}\n\n"
                 f"Error: Prompt not found.\n\n"
                 f"To create it:\n"
-                f"$$prompt {prompt_name} Your instruction here\n\n"
+                f"$$prompt {prompt_name} -- Your instruction here\n\n"
                 f"Or create file: `{prompt_path}`"
             )
         return CommandResult(output=output)
@@ -196,6 +207,9 @@ def handle_custom_prompt(
 def load_prompt_chain(tokens: list[str]) -> tuple[list[tuple[str, str]], str]:
     """Load all prompts in the command chain using hybrid approach.
 
+    For each token in the chain, loads and merges prompts from both
+    bundled and custom paths, applying merge_strategy from frontmatter.
+
     Uses frontmatter-based parsing when `subcommands:` is defined,
     otherwise falls back to greedy file loading.
 
@@ -212,18 +226,16 @@ def load_prompt_chain(tokens: list[str]) -> tuple[list[tuple[str, str]], str]:
     while remaining_tokens:
         token = remaining_tokens[0]
 
-        # Build the path for loading
-        if path_parts:
-            # For nested: load_prompt("notes", "add") for notes/add.md
-            subpath = "/".join(path_parts[1:] + [token]) if len(path_parts) > 1 else token
-            content = load_prompt(path_parts[0], subpath)
-        else:
-            content = load_prompt(token)
+        # Build path parts for this level
+        current_path_parts = path_parts + [token]
 
-        if content.startswith("Unknown command"):
+        # Load and merge from both bundled and custom paths
+        content = load_merged_prompt(current_path_parts)
+
+        if content is None:
             break  # No more prompts, rest is user input
 
-        current_path = "/".join(path_parts + [token]) if path_parts else token
+        current_path = "/".join(current_path_parts)
         prompts.append((current_path, content))
         path_parts.append(token)
         remaining_tokens.pop(0)
@@ -301,12 +313,12 @@ def handle_standard_prompt(
 
 # Ordered list of handlers to try
 # Notes commands are handled via prompt files + curl tool (not hardcoded handlers)
+# All prompt-based commands (bundled and custom) are handled by handle_standard_prompt
 COMMAND_HANDLERS: list[CommandHandler] = [
     handle_echo,
     handle_prompt,
     handle_help_command,
     handle_help,
-    handle_custom_prompt,
 ]
 
 

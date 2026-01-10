@@ -226,11 +226,11 @@ def list_available_commands() -> list[str]:
                 for file_path in directory.glob("*.md"):
                     commands.add(f"{directory.name} {file_path.stem}")
 
-    # Add custom prompts as top-level commands
+    # Add custom prompts (including nested ones like "git add")
     custom_path = settings.custom_prompts_path
     if custom_path.exists():
-        for file_path in custom_path.glob("*.md"):
-            commands.add(file_path.stem)
+        for file_path in custom_path.rglob("*.md"):
+            commands.add(_path_to_name(custom_path, file_path))
 
     return sorted(commands)
 
@@ -247,6 +247,7 @@ def list_subcommands(namespace: str) -> list[str]:
     settings = get_settings()
     user_path = settings.prompts_path
     bundled_path = get_bundled_prompts_path()
+    custom_path = settings.custom_prompts_path
 
     subcommands: set[str] = set()
 
@@ -262,14 +263,55 @@ def list_subcommands(namespace: str) -> list[str]:
         for file_path in user_ns_dir.glob("*.md"):
             subcommands.add(file_path.stem)
 
+    # Check custom prompts
+    custom_ns_dir = custom_path / namespace
+    if custom_ns_dir.is_dir():
+        for file_path in custom_ns_dir.glob("*.md"):
+            subcommands.add(file_path.stem)
+
     return sorted(subcommands)
+
+
+def _name_to_path(base_path: Path, name: str) -> Path:
+    """Convert a prompt name to a file path.
+
+    Args:
+        base_path: The base directory for prompts
+        name: The prompt name (e.g., "tr", "git add", "foo bar baz")
+
+    Returns:
+        Path like base_path/tr.md, base_path/git/add.md, base_path/foo/bar/baz.md
+    """
+    parts = name.split()
+    if len(parts) == 1:
+        return base_path / f"{parts[0]}.md"
+    else:
+        # All but last become directories, last becomes filename
+        return base_path / "/".join(parts[:-1]) / f"{parts[-1]}.md"
+
+
+def _path_to_name(base_path: Path, file_path: Path) -> str:
+    """Convert a file path back to a prompt name.
+
+    Args:
+        base_path: The base directory for prompts
+        file_path: The full path to the .md file
+
+    Returns:
+        Name like "tr", "git add", "foo bar baz"
+    """
+    relative = file_path.relative_to(base_path)
+    # Remove .md extension and convert path separators to spaces
+    name_parts = list(relative.parts)
+    name_parts[-1] = name_parts[-1].removesuffix(".md")
+    return " ".join(name_parts)
 
 
 def save_custom_prompt(name: str, content: str) -> str:
     """Save a custom prompt.
 
     Args:
-        name: The prompt name (e.g., "tr")
+        name: The prompt name (e.g., "tr", "git add", "foo bar baz")
         content: The prompt content (supports \\n for newlines)
 
     Returns:
@@ -284,7 +326,11 @@ def save_custom_prompt(name: str, content: str) -> str:
     # Convert literal \n to actual newlines
     content = content.replace("\\n", "\n")
 
-    file_path = settings.custom_prompts_path / f"{name}.md"
+    file_path = _name_to_path(settings.custom_prompts_path, name)
+
+    # Create parent directories if needed
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+
     file_path.write_text(content, encoding="utf-8")
 
     return f"Prompt '{name}' saved. Use it with: $${name} <input>"
@@ -294,16 +340,89 @@ def load_custom_prompt(name: str) -> str | None:
     """Load a custom prompt.
 
     Args:
-        name: The prompt name
+        name: The prompt name (e.g., "tr", "git add")
 
     Returns:
         Prompt content or None if not found.
     """
     settings = get_settings()
-    file_path = settings.custom_prompts_path / f"{name}.md"
+    file_path = _name_to_path(settings.custom_prompts_path, name)
 
     if file_path.exists():
         return file_path.read_text(encoding="utf-8")
+
+    return None
+
+
+def _load_bundled_by_path(path_parts: list[str]) -> str | None:
+    """Load a bundled prompt by path parts.
+
+    Args:
+        path_parts: List of path components (e.g., ["git", "add"])
+
+    Returns:
+        The prompt content or None if not found.
+    """
+    bundled_path = get_bundled_prompts_path()
+    file_path = bundled_path / "/".join(path_parts[:-1]) / f"{path_parts[-1]}.md" if len(path_parts) > 1 else bundled_path / f"{path_parts[0]}.md"
+
+    if file_path.exists():
+        return file_path.read_text(encoding="utf-8")
+
+    return None
+
+
+def _load_custom_by_path(path_parts: list[str]) -> tuple[str | None, dict]:
+    """Load a custom prompt by path parts.
+
+    Args:
+        path_parts: List of path components (e.g., ["git", "add"])
+
+    Returns:
+        Tuple of (prompt content without frontmatter, frontmatter dict) or (None, {})
+    """
+    settings = get_settings()
+    custom_path = settings.custom_prompts_path
+
+    if len(path_parts) > 1:
+        file_path = custom_path / "/".join(path_parts[:-1]) / f"{path_parts[-1]}.md"
+    else:
+        file_path = custom_path / f"{path_parts[0]}.md"
+
+    if file_path.exists():
+        content = file_path.read_text(encoding="utf-8")
+        frontmatter, body = parse_frontmatter(content)
+        return body, frontmatter
+
+    return None, {}
+
+
+def load_merged_prompt(path_parts: list[str]) -> str | None:
+    """Load and merge a prompt from bundled and custom paths.
+
+    Applies merge_strategy from custom prompt's frontmatter:
+    - "override" (default): custom replaces bundled
+    - "append": bundled + custom
+    - "prepend": custom + bundled
+
+    Args:
+        path_parts: List of path components (e.g., ["git"] or ["git", "add"])
+
+    Returns:
+        The merged prompt content or None if not found in either location.
+    """
+    bundled_content = _load_bundled_by_path(path_parts)
+    custom_content, frontmatter = _load_custom_by_path(path_parts)
+
+    if custom_content is not None:
+        if bundled_content is not None:
+            strategy = get_merge_strategy(frontmatter)
+            return merge_prompts(custom_content, bundled_content, strategy)
+        else:
+            return custom_content
+
+    if bundled_content is not None:
+        return bundled_content
 
     return None
 
@@ -312,20 +431,20 @@ def get_prompt_path(name: str) -> Path:
     """Get the file path for a custom prompt.
 
     Args:
-        name: The prompt name
+        name: The prompt name (e.g., "tr", "git add")
 
     Returns:
         Path to the prompt file.
     """
     settings = get_settings()
-    return settings.custom_prompts_path / f"{name}.md"
+    return _name_to_path(settings.custom_prompts_path, name)
 
 
 def list_custom_prompts() -> list[str]:
-    """List all custom prompts.
+    """List all custom prompts, including nested ones.
 
     Returns:
-        Sorted list of custom prompt names.
+        Sorted list of custom prompt names (e.g., ["git add", "tr", "foo bar baz"]).
     """
     settings = get_settings()
     custom_prompts_path = settings.custom_prompts_path
@@ -333,7 +452,12 @@ def list_custom_prompts() -> list[str]:
     if not custom_prompts_path.exists():
         return []
 
-    return sorted(file_path.stem for file_path in custom_prompts_path.glob("*.md"))
+    # Recursively find all .md files
+    prompts = []
+    for file_path in custom_prompts_path.rglob("*.md"):
+        prompts.append(_path_to_name(custom_prompts_path, file_path))
+
+    return sorted(prompts)
 
 
 def _extract_description(content: str) -> str:

@@ -14,6 +14,7 @@ from pal.prompts.loader import (
     list_subcommands,
     load_bundled_prompt,
     load_custom_prompt,
+    load_merged_prompt,
     load_prompt,
     merge_prompts,
     parse_frontmatter,
@@ -335,3 +336,136 @@ class TestCustomPrompts:
             # Don't create the directory
             prompts = list_custom_prompts()
             assert prompts == []
+
+    def test_save_and_load_nested_prompt(self, test_settings: Settings) -> None:
+        """save_custom_prompt creates directories for nested prompts."""
+        with patch("pal.prompts.loader.get_settings", return_value=test_settings):
+            result = save_custom_prompt("git add", "Interactive git add")
+            assert "saved" in result.lower()
+
+            loaded = load_custom_prompt("git add")
+            assert loaded == "Interactive git add"
+
+            # Verify file is in correct location
+            expected_path = test_settings.custom_prompts_path / "git" / "add.md"
+            assert expected_path.exists()
+
+    def test_save_and_load_deeply_nested_prompt(self, test_settings: Settings) -> None:
+        """save_custom_prompt handles multiple nesting levels."""
+        with patch("pal.prompts.loader.get_settings", return_value=test_settings):
+            result = save_custom_prompt("foo bar baz qux", "Deep prompt")
+            assert "saved" in result.lower()
+
+            loaded = load_custom_prompt("foo bar baz qux")
+            assert loaded == "Deep prompt"
+
+            # Verify file is in correct location
+            expected_path = (
+                test_settings.custom_prompts_path / "foo" / "bar" / "baz" / "qux.md"
+            )
+            assert expected_path.exists()
+
+    def test_list_custom_prompts_includes_nested(self, test_settings: Settings) -> None:
+        """list_custom_prompts includes nested prompts."""
+        with patch("pal.prompts.loader.get_settings", return_value=test_settings):
+            # Create flat and nested prompts
+            save_custom_prompt("flat", "Flat prompt")
+            save_custom_prompt("git add", "Git add")
+            save_custom_prompt("foo bar baz", "Deep prompt")
+
+            prompts = list_custom_prompts()
+            assert "flat" in prompts
+            assert "git add" in prompts
+            assert "foo bar baz" in prompts
+
+
+class TestLoadMergedPrompt:
+    """Tests for load_merged_prompt function."""
+
+    def test_loads_from_bundled(self, test_settings: Settings) -> None:
+        """load_merged_prompt loads from bundled when no custom exists."""
+        with patch("pal.prompts.loader.get_settings", return_value=test_settings):
+            test_settings.custom_prompts_path.mkdir(parents=True, exist_ok=True)
+
+            result = load_merged_prompt(["git", "commit"])
+            assert result is not None
+            assert "commit" in result.lower() or "git" in result.lower()
+
+    def test_loads_from_custom(self, test_settings: Settings) -> None:
+        """load_merged_prompt loads from custom when exists."""
+        with patch("pal.prompts.loader.get_settings", return_value=test_settings):
+            # Create custom prompt
+            save_custom_prompt("mycommand", "Custom content")
+
+            result = load_merged_prompt(["mycommand"])
+            assert result == "Custom content"
+
+    def test_loads_nested_custom(self, test_settings: Settings) -> None:
+        """load_merged_prompt loads nested custom prompts."""
+        with patch("pal.prompts.loader.get_settings", return_value=test_settings):
+            # Create nested custom prompt
+            save_custom_prompt("git add", "Interactive add")
+
+            result = load_merged_prompt(["git", "add"])
+            assert result == "Interactive add"
+
+    def test_custom_overrides_bundled(self, test_settings: Settings) -> None:
+        """load_merged_prompt uses custom to override bundled (default strategy)."""
+        with patch("pal.prompts.loader.get_settings", return_value=test_settings):
+            # Create custom override for bundled git/commit
+            git_dir = test_settings.custom_prompts_path / "git"
+            git_dir.mkdir(parents=True, exist_ok=True)
+            (git_dir / "commit.md").write_text("Custom commit")
+
+            result = load_merged_prompt(["git", "commit"])
+            assert result == "Custom commit"
+
+    def test_merge_strategy_append(self, test_settings: Settings) -> None:
+        """load_merged_prompt applies append merge strategy."""
+        with patch("pal.prompts.loader.get_settings", return_value=test_settings):
+            # Create custom with append strategy
+            git_dir = test_settings.custom_prompts_path / "git"
+            git_dir.mkdir(parents=True, exist_ok=True)
+            (git_dir / "commit.md").write_text(
+                "---\nmerge_strategy: append\n---\n\nCustom suffix"
+            )
+
+            result = load_merged_prompt(["git", "commit"])
+            assert result is not None
+            # Bundled content should come first, then custom
+            assert "Custom suffix" in result
+            bundled_content = load_bundled_prompt("git", "commit")
+            assert bundled_content is not None
+            assert bundled_content in result
+
+    def test_merge_strategy_prepend(self, test_settings: Settings) -> None:
+        """load_merged_prompt applies prepend merge strategy."""
+        with patch("pal.prompts.loader.get_settings", return_value=test_settings):
+            # Create custom with prepend strategy
+            git_dir = test_settings.custom_prompts_path / "git"
+            git_dir.mkdir(parents=True, exist_ok=True)
+            (git_dir / "commit.md").write_text(
+                "---\nmerge_strategy: prepend\n---\n\nCustom prefix"
+            )
+
+            result = load_merged_prompt(["git", "commit"])
+            assert result is not None
+            # Custom content should come first
+            assert result.startswith("Custom prefix")
+
+    def test_returns_none_for_nonexistent(self, test_settings: Settings) -> None:
+        """load_merged_prompt returns None for nonexistent prompts."""
+        with patch("pal.prompts.loader.get_settings", return_value=test_settings):
+            test_settings.custom_prompts_path.mkdir(parents=True, exist_ok=True)
+
+            result = load_merged_prompt(["nonexistent", "command"])
+            assert result is None
+
+    def test_deeply_nested_custom(self, test_settings: Settings) -> None:
+        """load_merged_prompt handles deeply nested paths."""
+        with patch("pal.prompts.loader.get_settings", return_value=test_settings):
+            # Create deeply nested custom prompt
+            save_custom_prompt("a b c d", "Deep content")
+
+            result = load_merged_prompt(["a", "b", "c", "d"])
+            assert result == "Deep content"

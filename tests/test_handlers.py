@@ -98,7 +98,7 @@ class TestHandlePrompt:
         with patch(
             "pal.tools.handlers.save_custom_prompt", return_value="Prompt saved"
         ):
-            cmd = ParsedCommand(namespace="prompt", rest="new New instruction")
+            cmd = ParsedCommand(namespace="prompt", rest="new -- New instruction")
             result = handle_prompt(cmd)
             assert result is not None
             assert "saved" in result.output.lower()
@@ -189,12 +189,21 @@ class TestHandleStandardPrompt:
 
     def test_bundles_prompts(self) -> None:
         """handle_standard_prompt bundles root and command prompts."""
-        with patch(
-            "pal.tools.handlers.load_prompt",
-            side_effect=lambda ns, sub=None: {
+
+        def mock_load_prompt(ns: str, sub: str | None = None) -> str:
+            return {
                 ("root", None): "Protocol content",
-                ("test", None): "Test content",
-            }.get((ns, sub), f"Unknown command: {ns}"),
+            }.get((ns, sub), f"Unknown command: {ns}")
+
+        def mock_load_merged(path_parts: list[str]) -> str | None:
+            key = tuple(path_parts)
+            return {
+                ("test",): "Test content",
+            }.get(key)
+
+        with (
+            patch("pal.tools.handlers.load_prompt", side_effect=mock_load_prompt),
+            patch("pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged),
         ):
             cmd = ParsedCommand(namespace="test", rest="")
             result = handle_standard_prompt(cmd)
@@ -205,12 +214,21 @@ class TestHandleStandardPrompt:
 
     def test_includes_rest_in_header(self) -> None:
         """handle_standard_prompt includes rest in header."""
-        with patch(
-            "pal.tools.handlers.load_prompt",
-            side_effect=lambda ns, sub=None: {
+
+        def mock_load_prompt(ns: str, sub: str | None = None) -> str:
+            return {
                 ("root", None): "Protocol",
-                ("test", None): "Content",
-            }.get((ns, sub), f"Unknown command: {ns}"),
+            }.get((ns, sub), f"Unknown command: {ns}")
+
+        def mock_load_merged(path_parts: list[str]) -> str | None:
+            key = tuple(path_parts)
+            return {
+                ("test",): "Content",
+            }.get(key)
+
+        with (
+            patch("pal.tools.handlers.load_prompt", side_effect=mock_load_prompt),
+            patch("pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged),
         ):
             cmd = ParsedCommand(namespace="test", rest="-v")
             result = handle_standard_prompt(cmd)
@@ -218,12 +236,21 @@ class TestHandleStandardPrompt:
 
     def test_includes_user_input(self) -> None:
         """handle_standard_prompt includes user input section."""
-        with patch(
-            "pal.tools.handlers.load_prompt",
-            side_effect=lambda ns, sub=None: {
+
+        def mock_load_prompt(ns: str, sub: str | None = None) -> str:
+            return {
                 ("root", None): "Protocol",
-                ("notes", None): "Notes command",
-            }.get((ns, sub), f"Unknown command: {ns}"),
+            }.get((ns, sub), f"Unknown command: {ns}")
+
+        def mock_load_merged(path_parts: list[str]) -> str | None:
+            key = tuple(path_parts)
+            return {
+                ("notes",): "Notes command",
+            }.get(key)
+
+        with (
+            patch("pal.tools.handlers.load_prompt", side_effect=mock_load_prompt),
+            patch("pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged),
         ):
             cmd = ParsedCommand(namespace="notes", rest="add hello world")
             result = handle_standard_prompt(cmd)
@@ -242,15 +269,22 @@ class TestExecuteCommand:
 
     def test_falls_back_to_standard_prompt(self) -> None:
         """execute_command falls back to standard prompt."""
+
+        def mock_load_prompt(ns: str, sub: str | None = None) -> str:
+            return {
+                ("root", None): "Protocol",
+            }.get((ns, sub), f"Unknown command: {ns}")
+
+        def mock_load_merged(path_parts: list[str]) -> str | None:
+            key = tuple(path_parts)
+            return {
+                ("unknown",): "Standard",
+            }.get(key)
+
         with (
             patch("pal.tools.handlers.load_custom_prompt", return_value=None),
-            patch(
-                "pal.tools.handlers.load_prompt",
-                side_effect=lambda ns, sub=None: {
-                    ("root", None): "Protocol",
-                    ("unknown", None): "Standard",
-                }.get((ns, sub), f"Unknown command: {ns}"),
-            ),
+            patch("pal.tools.handlers.load_prompt", side_effect=mock_load_prompt),
+            patch("pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged),
         ):
             cmd = ParsedCommand(namespace="unknown", rest="")
             result = asyncio.run(execute_command(cmd))
