@@ -83,7 +83,7 @@ def handle_prompt(
         return CommandResult(output=f"## $$prompt\n\n{content}")
 
     if not prompt_content:
-        # Check if prompt exists and show it
+        # Check if custom prompt exists first
         existing = load_custom_prompt(prompt_name)
         prompt_path = get_prompt_path(prompt_name)
 
@@ -95,14 +95,31 @@ def handle_prompt(
                 f"IMPORTANT: Display the FULL content above to the user, "
                 f"do not summarize."
             )
-        else:
+            return CommandResult(output=output)
+
+        # Fallback: check bundled prompts
+        path_parts = prompt_name.split()
+        bundled = load_merged_prompt(path_parts)
+
+        if bundled:
             output = (
                 f"## $$prompt {prompt_name}\n\n"
-                f"Error: Prompt not found.\n\n"
-                f"To create it:\n"
-                f"$$prompt {prompt_name} -- Your instruction here\n\n"
-                f"Or create file: `{prompt_path}`"
+                f"**Built-in prompt** (no custom override)\n\n"
+                f"```\n{bundled}\n```\n\n"
+                f"IMPORTANT: Display the FULL content above to the user, "
+                f"do not summarize.\n\n"
+                f"To customize, create: `{prompt_path}`"
             )
+            return CommandResult(output=output)
+
+        # Not found anywhere
+        output = (
+            f"## $$prompt {prompt_name}\n\n"
+            f"Error: Prompt not found.\n\n"
+            f"To create it:\n"
+            f"$$prompt {prompt_name} -- Your instruction here\n\n"
+            f"Or create file: `{prompt_path}`"
+        )
         return CommandResult(output=output)
 
     # Save new prompt

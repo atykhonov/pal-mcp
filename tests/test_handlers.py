@@ -86,12 +86,29 @@ class TestHandlePrompt:
         """handle_prompt shows error for nonexistent prompt."""
         with (
             patch("pal.tools.handlers.load_custom_prompt", return_value=None),
+            patch("pal.tools.handlers.load_merged_prompt", return_value=None),
             patch("pal.tools.handlers.get_prompt_path", return_value="/path/to"),
         ):
             cmd = ParsedCommand(namespace="prompt", rest="missing")
             result = handle_prompt(cmd)
             assert result is not None
             assert "Error" in result.output or "not found" in result.output.lower()
+
+    def test_falls_back_to_bundled_prompt(self) -> None:
+        """handle_prompt shows bundled prompt when no custom exists."""
+        with (
+            patch("pal.tools.handlers.load_custom_prompt", return_value=None),
+            patch(
+                "pal.tools.handlers.load_merged_prompt",
+                return_value="Bundled git commit instructions",
+            ),
+            patch("pal.tools.handlers.get_prompt_path", return_value="/path/to"),
+        ):
+            cmd = ParsedCommand(namespace="prompt", rest="git commit")
+            result = handle_prompt(cmd)
+            assert result is not None
+            assert "Bundled git commit instructions" in result.output
+            assert "Built-in prompt" in result.output
 
     def test_saves_new_prompt(self) -> None:
         """handle_prompt saves new prompt."""
