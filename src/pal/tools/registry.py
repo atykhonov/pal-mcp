@@ -17,7 +17,7 @@ from pal.prompts import (
 )
 from pal.tools.handlers import execute_command
 from pal.tools.curl import execute_curl
-from pal.tools.parser import parse_command, parse_pipeline
+from pal.tools.parser import parse_command
 
 if TYPE_CHECKING:
     from mcp.server import Server
@@ -254,20 +254,15 @@ async def _handle_run_command(
         ctx = None
 
     command_string = arguments.get("command", "").strip()
-    pipeline = parse_pipeline(command_string)
 
-    if not pipeline:
+    if not command_string:
         return [types.TextContent(type="text", text="Error: No command provided")]
 
-    results: list[str] = []
-
-    for raw_command in pipeline:
-        parsed = parse_command(raw_command)
-        output = await execute_command(parsed, ctx)
-        results.append(output)
-
-    output_text = "\n\n---\n\n".join(results)
-    return [types.TextContent(type="text", text=output_text)]
+    # No pipeline parsing - pass full command to execute_command
+    # Pipeline handling is done by the AI based on root.md instructions
+    parsed = parse_command(command_string)
+    output = await execute_command(parsed, ctx)
+    return [types.TextContent(type="text", text=output)]
 
 
 def _handle_list_commands() -> (
