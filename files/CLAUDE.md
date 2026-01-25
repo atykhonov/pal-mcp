@@ -1,32 +1,13 @@
-# Global Claude Code Instructions
+# PAL Local Overrides
 
-## $$ Commands
+When you see `$$<command> [subcommand]`, check for local prompt first:
+- `$$git commit` → `.pal-mcp-prompts/git/commit.md`
+- `$$notes` → `.pal-mcp-prompts/notes.md`
 
-When you see a message starting with `$$`:
+If local file exists, check its YAML frontmatter for `merge_strategy`:
+- `override` (default) — follow local only, skip MCP
+- `append` — call `run_pal_command`, then apply local after
+- `prepend` — call `run_pal_command`, apply local before
 
-1. Extract command name (first word after $$) and args (rest)
-
-2. Check for LOCAL instructions in current project:
-   - `.pal/commands/<command>.md` — full override
-   - `.pal/commands/<command>.extend.md` — extension
-
-3. Execute based on what exists:
-
-   a) If `.pal/commands/<command>.md` exists:
-      → Read and follow ONLY local instructions (ignore MCP)
-
-   b) If `.pal/commands/<command>.extend.md` exists:
-      → Call MCP tool `run_command` to get default instructions
-      → Read local `.extend.md` file
-      → Follow BOTH: MCP defaults + local extensions
-
-   c) If neither exists:
-      → Call MCP tool `run_command` for default instructions
-
-Example: `$$commit fix auth bug`
-- command = "commit"
-- args = "fix auth bug"
-- Check .pal/commands/commit.md → if exists, use it
-- Else check .pal/commands/commit.extend.md → if exists, combine with MCP
-- Else call run_command(command="commit", args="fix auth bug")
+If no local file exists, call `run_pal_command` with the command.
 
