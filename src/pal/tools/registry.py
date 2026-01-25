@@ -107,7 +107,7 @@ def register_tools(server: Server) -> None:
             ),
             # Curl tool
             types.Tool(
-                name="curl",
+                name="pal_curl",
                 description=CURL_DESCRIPTION,
                 inputSchema={
                     "type": "object",
@@ -156,7 +156,7 @@ def register_tools(server: Server) -> None:
         if name == "list_pal_resources":
             return await _handle_list_resources()
 
-        if name == "curl":
+        if name == "pal_curl":
             return _handle_curl(arguments)
 
         raise ValueError(f"Unknown tool: {name}")

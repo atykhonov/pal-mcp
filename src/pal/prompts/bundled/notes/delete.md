@@ -29,7 +29,7 @@ First, find the note (if partial UUID):
 curl -s 'http://meilisearch:7700/indexes/notes/documents/<full_uuid>'
 ```
 
-Then delete via the `curl` tool:
+Then delete via the `pal_curl` tool:
 ```curl
 curl -s -X DELETE 'http://meilisearch:7700/indexes/notes/documents/<full_uuid>'
 ```

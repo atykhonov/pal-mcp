@@ -28,7 +28,7 @@ Add a new note to the Meilisearch index.
    - `tags`: User-provided tags + 2-3 auto-extracted keywords from content
    - `created_at`: ISO 8601 timestamp (e.g., `2024-01-15T10:30:00Z`)
 
-3. **Save to Meilisearch** via the `curl` tool:
+3. **Save to Meilisearch** via the `pal_curl` tool:
 ```curl
 curl -s -X POST 'http://meilisearch:7700/indexes/notes/documents' \
   -H 'Content-Type: application/json' \

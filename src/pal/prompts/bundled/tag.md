@@ -1,6 +1,6 @@
 Tag and retrieve content by labels, scoped to conversation session.
 
-**IMPORTANT:** Execute all curl commands using the `curl` MCP tool, not bash. Pass the full curl command string to the tool.
+**IMPORTANT:** Execute all curl commands using the `pal_curl` MCP tool, not bash. Pass the full curl command string to the tool.
 
 ## Session UUID
 
@@ -28,7 +28,7 @@ If no content provided, defaults to `$REPLY` (your last response).
    - `content`: The full content to tag
    - `created_at`: Current ISO timestamp
 
-5. **Save to Meilisearch** using the `curl` tool:
+5. **Save to Meilisearch** using the `pal_curl` tool:
 ```
 curl -s -X POST 'http://meilisearch:7700/indexes/tags/documents' \
   -H 'Content-Type: application/json' \

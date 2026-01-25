@@ -1,6 +1,6 @@
 Manage notes with full-text and AI search.
 
-**IMPORTANT:** Execute all curl commands using the `curl` MCP tool, not bash. Pass the full curl command string to the tool.
+**IMPORTANT:** Execute all curl commands using the `pal_curl` MCP tool, not bash. Pass the full curl command string to the tool.
 
 ## Subcommands
 
@@ -19,7 +19,7 @@ Add a new note to Meilisearch.
    - `tags`: Combine user-provided tags with 2-3 auto-extracted keywords from content
    - `created_at`: Current ISO timestamp (e.g., `2026-01-05T12:00:00Z`)
 
-3. **Save to Meilisearch** using the `curl` tool:
+3. **Save to Meilisearch** using the `pal_curl` tool:
 ```
 curl -s -X POST 'http://meilisearch:7700/indexes/notes/documents' \
   -H 'Content-Type: application/json' \
@@ -31,7 +31,7 @@ curl -s -X POST 'http://meilisearch:7700/indexes/notes/documents' \
 ---
 
 ### `list`
-List recent notes using the `curl` tool:
+List recent notes using the `pal_curl` tool:
 
 ```
 curl -s -X POST 'http://meilisearch:7700/indexes/notes/search' \
@@ -48,7 +48,7 @@ Format the output as a readable list showing:
 ---
 
 ### `search <query>`
-Regular full-text search using the `curl` tool:
+Regular full-text search using the `pal_curl` tool:
 
 ```
 curl -s -X POST 'http://meilisearch:7700/indexes/notes/search' \
@@ -61,7 +61,7 @@ Format results showing title, tags, and a snippet of matching content.
 ---
 
 ### `ai <query>`
-AI-powered semantic search using embeddings. Use the `curl` tool:
+AI-powered semantic search using embeddings. Use the `pal_curl` tool:
 
 ```
 curl -s -X POST 'http://meilisearch:7700/indexes/notes/search' \
@@ -74,7 +74,7 @@ Format results showing title, tags, and content snippet. Note that these results
 ---
 
 ### `view <id>`
-View a note by its ID (full or partial UUID). Use the `curl` tool:
+View a note by its ID (full or partial UUID). Use the `pal_curl` tool:
 
 For full UUID:
 ```
@@ -97,7 +97,7 @@ Display the full note content.
 Delete a note by its ID (full or partial UUID).
 
 1. First find the note (same as `view`) to get the full UUID
-2. Delete using the `curl` tool:
+2. Delete using the `pal_curl` tool:
 ```
 curl -s -X DELETE 'http://meilisearch:7700/indexes/notes/documents/<full_uuid>'
 ```
@@ -110,7 +110,7 @@ Confirm deletion with the note title.
 Update tags on an existing note.
 
 1. First fetch the note to get current data
-2. Update with new tags using the `curl` tool:
+2. Update with new tags using the `pal_curl` tool:
 ```
 curl -s -X PUT 'http://meilisearch:7700/indexes/notes/documents' \
   -H 'Content-Type: application/json' \

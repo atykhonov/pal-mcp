@@ -27,7 +27,7 @@ Update tags on an existing note.
 
 ## Execution
 
-1. **Get current note** via the `curl` tool:
+1. **Get current note** via the `pal_curl` tool:
 ```curl
 curl -s 'http://meilisearch:7700/indexes/notes/documents/<full_uuid>'
 ```

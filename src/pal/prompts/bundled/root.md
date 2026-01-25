@@ -45,7 +45,7 @@ For example: `$$prompt foo -- echo hello | world` has no pipeline - everything a
 When you receive bundled prompts (this response):
 1. Read the Command and Subcommand sections below
 2. Parse the User Input section for arguments and content
-3. Execute using the curl tool as described in the prompts
+3. Execute using the pal_curl tool as described in the prompts
 4. Format output as specified in the prompts
 
 ## Error Handling

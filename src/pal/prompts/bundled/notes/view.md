@@ -15,7 +15,7 @@ Retrieve a specific note by its ID.
 
 ## Execution
 
-For full UUID, execute via the `curl` tool:
+For full UUID, execute via the `pal_curl` tool:
 ```curl
 curl -s 'http://meilisearch:7700/indexes/notes/documents/<full_uuid>'
 ```

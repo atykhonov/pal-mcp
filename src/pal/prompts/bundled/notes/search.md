@@ -26,7 +26,7 @@ Full-text search across all notes.
 
 ## Execution
 
-Execute via the `curl` tool:
+Execute via the `pal_curl` tool:
 ```curl
 curl -s -X POST 'http://meilisearch:7700/indexes/notes/search' \
   -H 'Content-Type: application/json' \

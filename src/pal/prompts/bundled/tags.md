@@ -1,6 +1,6 @@
 Retrieve and manage tagged content for current conversation session.
 
-**IMPORTANT:** Execute all curl commands using the `curl` MCP tool, not bash. Pass the full curl command string to the tool.
+**IMPORTANT:** Execute all curl commands using the `pal_curl` MCP tool, not bash. Pass the full curl command string to the tool.
 
 ## Session UUID
 

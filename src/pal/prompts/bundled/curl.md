@@ -1,15 +1,15 @@
-Execute HTTP requests via the `curl` MCP tool.
+Execute HTTP requests via the `pal_curl` MCP tool.
 
 ## MCP Tool
-Call `curl` with parameters:
+Call `pal_curl` with parameters:
 - `command` (required): Full curl command string
 - `timeout` (optional): Timeout in seconds (default 30)
 
 ## Usage
-The curl tool executes curl commands on the server. Use it when instructions specify:
+The pal_curl tool executes curl commands on the server. Use it when instructions specify:
 
 ```
-Execute via the `curl` tool:
+Execute via the `pal_curl` tool:
 ```curl
 curl -s 'http://meilisearch:7700/health'
 ```
