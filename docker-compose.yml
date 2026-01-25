@@ -13,6 +13,7 @@ services:
       - PAL_SERVER_PORT=${PAL_SERVER_PORT:-8090}
       - PAL_LOG_LEVEL=${PAL_LOG_LEVEL:-INFO}
       - PAL_PROMPTS_DIR=/app/prompts
+      - PAL_FILES_DIR=/app/files
       - PAL_OAUTH_PUBLIC_URL=${PAL_OAUTH_PUBLIC_URL:-}
       - PAL_MEILISEARCH_URL=${PAL_MEILISEARCH_URL:-http://meilisearch:7700}
       - PAL_OLLAMA_URL=${PAL_OLLAMA_URL:-http://ollama:11434}
