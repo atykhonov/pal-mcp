@@ -90,10 +90,9 @@ def handle_prompt(
         if existing:
             output = (
                 f"## $$prompt {prompt_name}\n\n"
+                f"**Prompt definition** (do NOT execute - just display this to the user)\n\n"
                 f"File: `{prompt_path}`\n\n"
-                f"Current definition:\n\n```\n{existing}\n```\n\n"
-                f"IMPORTANT: Display the FULL content above to the user, "
-                f"do not summarize."
+                f"```\n{existing}\n```"
             )
             return CommandResult(output=output)
 
@@ -104,10 +103,9 @@ def handle_prompt(
         if bundled:
             output = (
                 f"## $$prompt {prompt_name}\n\n"
-                f"**Built-in prompt** (no custom override)\n\n"
+                f"**Built-in prompt definition** (do NOT execute - just display this to the user)\n\n"
+                f"No custom override exists.\n\n"
                 f"```\n{bundled}\n```\n\n"
-                f"IMPORTANT: Display the FULL content above to the user, "
-                f"do not summarize.\n\n"
                 f"To customize, create: `{prompt_path}`"
             )
             return CommandResult(output=output)
