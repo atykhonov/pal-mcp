@@ -248,6 +248,16 @@ def load_prompt_chain(tokens: list[str]) -> tuple[list[tuple[str, str]], str]:
         content = load_merged_prompt(current_path_parts)
 
         if content is None:
+            # Token might be a namespace directory without its own .md file
+            # (e.g., custom/wfi/ exists with start.md but no wfi.md)
+            # Look ahead to see if next token matches a subcommand file
+            if len(remaining_tokens) > 1:
+                lookahead_parts = current_path_parts + [remaining_tokens[1]]
+                if load_merged_prompt(lookahead_parts) is not None:
+                    # Namespace exists via subcommands — skip and continue
+                    path_parts.append(token)
+                    remaining_tokens.pop(0)
+                    continue
             break  # No more prompts, rest is user input
 
         current_path = "/".join(current_path_parts)

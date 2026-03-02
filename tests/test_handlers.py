@@ -274,6 +274,38 @@ class TestHandleStandardPrompt:
             # Since "add" doesn't have a file, it becomes part of user input
             assert "# User Input" in result.output
 
+    def test_namespace_dir_without_root_file(self) -> None:
+        """handle_standard_prompt works for namespace dirs without a root .md file.
+
+        E.g., custom/wfi/start.md exists but custom/wfi.md does not.
+        Running $$wfi start should find and load wfi/start.md.
+        """
+
+        def mock_load_prompt(ns: str, sub: str | None = None) -> str:
+            return {
+                ("root", None): "Protocol",
+            }.get((ns, sub), f"Unknown command: {ns}")
+
+        def mock_load_merged(path_parts: list[str]) -> str | None:
+            key = tuple(path_parts)
+            return {
+                # No ("wfi",) entry — simulates missing wfi.md
+                ("wfi", "start"): "WFI start content",
+            }.get(key)
+
+        with (
+            patch("pal.tools.handlers.load_prompt", side_effect=mock_load_prompt),
+            patch("pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged),
+        ):
+            cmd = ParsedCommand(namespace="wfi", rest="start TRM-594")
+            result = handle_standard_prompt(cmd)
+            assert "# Command: wfi/start" in result.output
+            assert "WFI start content" in result.output
+            assert "# User Input" in result.output
+            assert "TRM-594" in result.output
+            # Should NOT show error
+            assert "isn't defined" not in result.output
+
 
 class TestExecuteCommand:
     """Tests for execute_command function."""
