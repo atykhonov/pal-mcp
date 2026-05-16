@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from mcp.server.fastmcp import Context, FastMCP
+from mcp.server.transport_security import TransportSecuritySettings
 
 from pal.config import get_settings
 from pal.prompts import (
@@ -22,7 +23,11 @@ SERVER_INSTRUCTIONS = (
     "call run_pal_command with the command text."
 )
 
-mcp = FastMCP("pal-server", instructions=SERVER_INSTRUCTIONS)
+mcp = FastMCP(
+    "pal-server",
+    instructions=SERVER_INSTRUCTIONS,
+    transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+)
 
 
 @mcp.tool()
