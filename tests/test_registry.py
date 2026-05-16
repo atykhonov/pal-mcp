@@ -14,7 +14,7 @@ class TestToolRegistration:
 
     def test_all_tools_registered(self) -> None:
         """All 5 tools are registered."""
-        tool_names = {name for name in mcp._tool_manager._tools}
+        tool_names = set(mcp._tool_manager._tools)
         expected = {
             "run_pal_command",
             "list_pal_commands",

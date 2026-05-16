@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import json
+from collections.abc import AsyncIterator
 from typing import Any
 from urllib.parse import parse_qs, urlencode
 
@@ -23,14 +24,12 @@ from pal.tools import mcp
 class AuthMiddleware:
     """ASGI middleware that enforces OAuth/IP-based authentication."""
 
-    def __init__(
-        self, app: Any, oauth: OAuthManager, settings: Settings
-    ) -> None:
+    def __init__(self, app: Any, oauth: OAuthManager, settings: Settings) -> None:
         self.app = app
         self.oauth = oauth
         self.settings = settings
 
-    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+    async def __call__(self, scope: dict[str, Any], receive: Any, send: Any) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
@@ -48,27 +47,27 @@ class AuthMiddleware:
 
         await self.app(scope, receive, send)
 
-    def _is_authenticated(self, scope: dict) -> bool:
+    def _is_authenticated(self, scope: dict[str, Any]) -> bool:
         token = self._get_bearer_token(scope)
         if token:
             is_valid = self.oauth.validate_token(token)
-            print(f"[AUTH] Token validation: {is_valid}, token prefix: {token[:20] if len(token) > 20 else token}...")
+            print(
+                f"[AUTH] Token validation: {is_valid}, token prefix: {token[:20] if len(token) > 20 else token}..."
+            )
             if is_valid:
                 return True
         client_ip, is_proxied = self._get_client_ip(scope)
-        if not is_proxied and self.oauth.is_ip_allowed(client_ip):
-            return True
-        return False
+        return not is_proxied and self.oauth.is_ip_allowed(client_ip)
 
-    def _get_bearer_token(self, scope: dict) -> str | None:
+    def _get_bearer_token(self, scope: dict[str, Any]) -> str | None:
         for name, value in scope.get("headers", []):
             if name == b"authorization":
                 auth = value.decode()
                 if auth.startswith("Bearer "):
-                    return auth[7:]
+                    return str(auth[7:])
         return None
 
-    def _get_client_ip(self, scope: dict) -> tuple[str, bool]:
+    def _get_client_ip(self, scope: dict[str, Any]) -> tuple[str, bool]:
         for name, value in scope.get("headers", []):
             if name in (b"x-forwarded-for", b"x-real-ip"):
                 return value.decode().split(",")[0].strip(), True
@@ -78,18 +77,17 @@ class AuthMiddleware:
         return "", False
 
 
-def _create_oauth_routes(
-    oauth: OAuthManager, settings: Settings
-) -> list[Route]:
+def _create_oauth_routes(oauth: OAuthManager, settings: Settings) -> list[Route]:
     """Create Starlette routes for OAuth endpoints."""
 
-    async def oauth_metadata(request: Request) -> JSONResponse:
+    async def oauth_metadata(request: Request) -> JSONResponse:  # noqa: ARG001
         return JSONResponse(oauth.get_metadata())
 
-    async def protected_resource_metadata(request: Request) -> JSONResponse:
+    async def protected_resource_metadata(
+        request: Request,  # noqa: ARG001
+    ) -> JSONResponse:
         base_url = (
-            settings.oauth_public_url
-            or f"http://localhost:{settings.server_port}"
+            settings.oauth_public_url or f"http://localhost:{settings.server_port}"
         )
         return JSONResponse(
             {
@@ -209,9 +207,7 @@ def _create_oauth_routes(
                 },
                 status_code=400,
             )
-        access_token = oauth.exchange_code(
-            code, client_id, redirect_uri, code_verifier
-        )
+        access_token = oauth.exchange_code(code, client_id, redirect_uri, code_verifier)
         if not access_token:
             return JSONResponse(
                 {
@@ -252,9 +248,7 @@ def _create_file_route(settings: Settings) -> Route:
         path = request.path_params["path"]
         filepath = settings.files_path / path
         if filepath.exists():
-            return Response(
-                filepath.read_bytes(), media_type="text/plain"
-            )
+            return Response(filepath.read_bytes(), media_type="text/plain")
         return Response("Not Found", status_code=404)
 
     return Route("/files/{path:path}", handle_files, methods=["GET"])
@@ -271,17 +265,17 @@ def create_app(settings: Settings | None = None) -> Starlette:
 
     oauth = get_oauth_manager(settings)
 
-    # Configure FastMCP transport paths
-    mcp.settings.streamable_http_path = "/"
-
-    # Wrap MCP transports with auth
-    authed_streamable = AuthMiddleware(
-        mcp.streamable_http_app(), oauth, settings
+    # Both transports use non-overlapping paths:
+    #   SSE: /sse (GET), /messages (POST)
+    #   Streamable HTTP: /mcp (POST/GET)
+    # Combine into one Starlette sub-app, wrap with auth, mount at "/"
+    combined_mcp = Starlette(
+        routes=[*mcp.sse_app().routes, *mcp.streamable_http_app().routes]
     )
-    authed_sse = AuthMiddleware(mcp.sse_app(), oauth, settings)
+    authed_mcp = AuthMiddleware(combined_mcp, oauth, settings)
 
     @contextlib.asynccontextmanager
-    async def lifespan(app: Starlette):
+    async def lifespan(app: Starlette) -> AsyncIterator[None]:  # noqa: ARG001
         async with mcp.session_manager.run():
             yield
 
@@ -290,16 +284,14 @@ def create_app(settings: Settings | None = None) -> Starlette:
         *_create_oauth_routes(oauth, settings),
         # Static files (unauthenticated)
         _create_file_route(settings),
-        # MCP Streamable HTTP (authenticated)
-        Mount("/mcp", app=authed_streamable),
-        # MCP SSE (authenticated) - handles /sse GET + /messages POST
-        Mount("/", app=authed_sse),
+        # MCP transports (authenticated): /mcp, /sse, /messages
+        Mount("/", app=authed_mcp),  # type: ignore[arg-type]
     ]
 
     return Starlette(routes=routes, lifespan=lifespan)
 
 
-async def run_stdio_server(settings: Settings) -> None:
+async def run_stdio_server(settings: Settings) -> None:  # noqa: ARG001
     """Run the MCP server with stdio transport."""
     await mcp.run_stdio_async()
 

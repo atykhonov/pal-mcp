@@ -26,13 +26,13 @@ mcp = FastMCP("pal-server", instructions=SERVER_INSTRUCTIONS)
 
 
 @mcp.tool()
-async def run_pal_command(command: str, ctx: Context) -> str:
+async def run_pal_command(command: str, ctx: Context) -> str:  # type: ignore[type-arg]
     """Execute a PAL $$ command. For built-in commands (echo, prompt, help): executes and returns result. For prompt-based commands: returns bundled prompts for you to follow."""
     command = command.strip()
     if not command:
         return "Error: No command provided"
 
-    print(f"[TOOL] Executing run_pal_command...")
+    print("[TOOL] Executing run_pal_command...")
     parsed = parse_command(command)
     return await execute_command(parsed, ctx.request_context)
 
