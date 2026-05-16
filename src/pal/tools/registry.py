@@ -1,12 +1,10 @@
-"""MCP tool and resource registration."""
+"""MCP tool registration using FastMCP."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any
+import json
 
-import mcp.types as types
-from mcp.server.lowlevel.helper_types import ReadResourceContents
-from mcp.server.lowlevel.server import request_ctx
+from mcp.server.fastmcp import Context, FastMCP
 
 from pal.config import get_settings
 from pal.prompts import (
@@ -15,299 +13,56 @@ from pal.prompts import (
     load_custom_prompt,
     load_prompt,
 )
-from pal.tools.handlers import execute_command
 from pal.tools.curl import execute_curl
+from pal.tools.handlers import execute_command
 from pal.tools.parser import parse_command
 
-if TYPE_CHECKING:
-    from mcp.server import Server
-
-
-# Tool descriptions
-RUN_PAL_COMMAND_DESCRIPTION: str = (
-    "Execute a PAL $$ command. "
-    "For built-in commands (echo, prompt, help): executes and returns result. "
-    "For prompt-based commands: returns bundled prompts for you to follow."
+SERVER_INSTRUCTIONS = (
+    "When you see $$ at the start of user input, "
+    "call run_pal_command with the command text."
 )
 
-LIST_PAL_COMMANDS_DESCRIPTION: str = "List all available $$ commands"
-
-READ_PAL_RESOURCE_DESCRIPTION: str = (
-    "Read PAL resource files (prompt definitions). "
-    "Returns the content of the specified prompt file."
-)
-
-LIST_PAL_RESOURCES_DESCRIPTION: str = (
-    "List all available PAL prompt resources. "
-    "Returns URIs that can be used with read_pal_resource."
-)
-
-CURL_DESCRIPTION: str = (
-    "Execute a curl command on the server. "
-    "Pass the full curl command string (e.g., 'curl -s http://localhost:7700/health'). "
-    "All standard curl flags are supported. "
-    "Returns JSON with 'success', 'output', and optionally 'error'."
-)
+mcp = FastMCP("pal-server", instructions=SERVER_INSTRUCTIONS)
 
 
-def register_tools(server: Server) -> None:
-    """Register all MCP tools with the server.
+@mcp.tool()
+async def run_pal_command(command: str, ctx: Context) -> str:
+    """Execute a PAL $$ command. For built-in commands (echo, prompt, help): executes and returns result. For prompt-based commands: returns bundled prompts for you to follow."""
+    command = command.strip()
+    if not command:
+        return "Error: No command provided"
 
-    Args:
-        server: The MCP server instance.
-    """
-
-    @server.list_tools()  # type: ignore[misc]
-    async def list_tools() -> list[types.Tool]:
-        """Return the list of available tools."""
-        return [
-            types.Tool(
-                name="run_pal_command",
-                description=RUN_PAL_COMMAND_DESCRIPTION,
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "command": {
-                            "type": "string",
-                            "description": (
-                                "The full command string "
-                                "(e.g., 'git commit' or 'git commit | review')"
-                            ),
-                        },
-                    },
-                    "required": ["command"],
-                },
-            ),
-            types.Tool(
-                name="list_pal_commands",
-                description=LIST_PAL_COMMANDS_DESCRIPTION,
-                inputSchema={"type": "object", "properties": {}},
-            ),
-            types.Tool(
-                name="read_pal_resource",
-                description=READ_PAL_RESOURCE_DESCRIPTION,
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "uri": {
-                            "type": "string",
-                            "description": (
-                                "The resource URI "
-                                "(e.g., 'pal://prompts/notes.md' or 'pal://prompts/custom/tr.md')"
-                            ),
-                        },
-                    },
-                    "required": ["uri"],
-                },
-            ),
-            types.Tool(
-                name="list_pal_resources",
-                description=LIST_PAL_RESOURCES_DESCRIPTION,
-                inputSchema={"type": "object", "properties": {}},
-            ),
-            # Curl tool
-            types.Tool(
-                name="pal_curl",
-                description=CURL_DESCRIPTION,
-                inputSchema={
-                    "type": "object",
-                    "properties": {
-                        "command": {
-                            "type": "string",
-                            "description": "Full curl command (e.g., 'curl -s -X GET http://localhost:7700/health')",
-                        },
-                        "timeout": {
-                            "type": "integer",
-                            "description": "Timeout in seconds (default 30)",
-                        },
-                    },
-                    "required": ["command"],
-                },
-            ),
-        ]
-
-    @server.call_tool()  # type: ignore[misc]
-    async def call_tool(
-        name: str, arguments: dict[str, str]
-    ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-        """Handle tool execution.
-
-        Args:
-            name: The tool name.
-            arguments: The tool arguments.
-
-        Returns:
-            List of content items.
-
-        Raises:
-            ValueError: If the tool name is unknown.
-        """
-        print(f"[TOOL] Executing {name}...")
-
-        if name == "run_pal_command":
-            return await _handle_run_command(arguments)
-
-        if name == "list_pal_commands":
-            return _handle_list_commands()
-
-        if name == "read_pal_resource":
-            return await _handle_read_resource(arguments)
-
-        if name == "list_pal_resources":
-            return await _handle_list_resources()
-
-        if name == "pal_curl":
-            return _handle_curl(arguments)
-
-        raise ValueError(f"Unknown tool: {name}")
-
-    @server.list_resources()  # type: ignore[misc]
-    async def list_resources() -> list[types.Resource]:
-        """List available prompt files as MCP resources."""
-        resources: list[types.Resource] = []
-        settings = get_settings()
-
-        # List prompt files (hierarchical: git.md, git/commit.md, etc.)
-        prompts_path = settings.prompts_path
-        if prompts_path.exists():
-            for path in prompts_path.rglob("*.md"):
-                rel_path = path.relative_to(prompts_path)
-                # Skip custom subdirectory (handled separately)
-                if rel_path.parts and rel_path.parts[0] == "custom":
-                    continue
-                resources.append(
-                    types.Resource(
-                        uri=f"pal://prompts/{rel_path}",
-                        name=str(rel_path),
-                        description=f"Prompt file: {rel_path}",
-                        mimeType="text/markdown",
-                    )
-                )
-
-        # List custom prompts
-        for name in list_custom_prompts():
-            resources.append(
-                types.Resource(
-                    uri=f"pal://prompts/custom/{name}.md",
-                    name=f"custom/{name}.md",
-                    description=f"Custom prompt: {name}",
-                    mimeType="text/markdown",
-                )
-            )
-
-        return resources
-
-    @server.read_resource()  # type: ignore[misc]
-    async def read_resource(uri: types.AnyUrl) -> list[ReadResourceContents]:
-        """Read a prompt file by URI.
-
-        URI formats:
-            pal://prompts/git.md
-            pal://prompts/git/commit.md
-            pal://prompts/custom/tr.md
-        """
-        uri_str = str(uri)
-        content: str | None = None
-
-        if uri_str.startswith("pal://prompts/custom/"):
-            # Custom prompt: pal://prompts/custom/tr.md
-            name = uri_str[len("pal://prompts/custom/") :].removesuffix(".md")
-            content = load_custom_prompt(name)
-
-        elif uri_str.startswith("pal://prompts/"):
-            # Built-in prompt: pal://prompts/git.md or pal://prompts/git/commit.md
-            rel_path = uri_str[len("pal://prompts/") :]
-            parts = rel_path.removesuffix(".md").split("/")
-
-            if len(parts) == 1:
-                content = load_prompt(parts[0])
-            elif len(parts) == 2:
-                content = load_prompt(parts[0], parts[1])
-            else:
-                # Deeper nesting - read file directly
-                settings = get_settings()
-                file_path = settings.prompts_path / rel_path
-                if file_path.exists():
-                    content = file_path.read_text(encoding="utf-8")
-
-        if content is None:
-            raise ValueError(f"Resource not found: {uri_str}")
-
-        return [ReadResourceContents(content=content, mime_type="text/markdown")]
+    print(f"[TOOL] Executing run_pal_command...")
+    parsed = parse_command(command)
+    return await execute_command(parsed, ctx.request_context)
 
 
-async def _handle_run_command(
-    arguments: dict[str, str],
-) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-    """Handle the run_pal_command tool.
-
-    Args:
-        arguments: The tool arguments containing the command.
-
-    Returns:
-        List of text content with the command results.
-    """
-    # Get request context for MCP session access (e.g., sampling)
-    try:
-        ctx = request_ctx.get()
-    except LookupError:
-        ctx = None
-
-    command_string = arguments.get("command", "").strip()
-
-    if not command_string:
-        return [types.TextContent(type="text", text="Error: No command provided")]
-
-    # No pipeline parsing - pass full command to execute_command
-    # Pipeline handling is done by the AI based on root.md instructions
-    parsed = parse_command(command_string)
-    output = await execute_command(parsed, ctx)
-    return [types.TextContent(type="text", text=output)]
-
-
-def _handle_list_commands() -> (
-    list[types.TextContent | types.ImageContent | types.EmbeddedResource]
-):
-    """Handle the list_pal_commands tool.
-
-    Returns:
-        List of text content with available commands.
-    """
+@mcp.tool()
+async def list_pal_commands() -> str:
+    """List all available $$ commands."""
+    print("[TOOL] Executing list_pal_commands...")
     commands = list_available_commands()
-    command_list = ", ".join(commands)
-    return [types.TextContent(type="text", text=f"Commands: {command_list}")]
+    return f"Commands: {', '.join(commands)}"
 
 
-async def _handle_read_resource(
-    arguments: dict[str, str],
-) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-    """Handle the read_pal_resource tool.
-
-    Args:
-        arguments: The tool arguments containing the URI.
-
-    Returns:
-        List of text content with the resource content.
-    """
-    uri = arguments.get("uri", "").strip()
+@mcp.tool()
+async def read_pal_resource(uri: str) -> str:
+    """Read PAL resource files (prompt definitions). Returns the content of the specified prompt file."""
+    uri = uri.strip()
     if not uri:
-        return [types.TextContent(type="text", text="Error: URI is required")]
+        return "Error: URI is required"
 
+    print("[TOOL] Executing read_pal_resource...")
     content: str | None = None
 
     if uri.startswith("pal://prompts/custom/"):
-        # Custom prompt: pal://prompts/custom/tr.md
         name = uri[len("pal://prompts/custom/") :].removesuffix(".md")
         content = load_custom_prompt(name)
-
     elif uri.startswith("pal://prompts/"):
-        # Built-in prompt: pal://prompts/git.md or pal://prompts/git/commit.md
         rel_path = uri[len("pal://prompts/") :]
         parts = rel_path.removesuffix(".md").split("/")
-
         if len(parts) == 1:
             content = load_prompt(parts[0])
-            # load_prompt returns "Unknown command: ..." if not found
             if content.startswith("Unknown command:"):
                 content = None
         elif len(parts) == 2:
@@ -315,30 +70,23 @@ async def _handle_read_resource(
             if content.startswith("Unknown command:"):
                 content = None
         else:
-            # Deeper nesting - read file directly
             settings = get_settings()
             file_path = settings.prompts_path / rel_path
             if file_path.exists():
                 content = file_path.read_text(encoding="utf-8")
 
     if content is None:
-        return [types.TextContent(type="text", text=f"Error: Resource not found: {uri}")]
+        return f"Error: Resource not found: {uri}"
+    return content
 
-    return [types.TextContent(type="text", text=content)]
 
-
-async def _handle_list_resources() -> (
-    list[types.TextContent | types.ImageContent | types.EmbeddedResource]
-):
-    """Handle the list_pal_resources tool.
-
-    Returns:
-        List of text content with available resource URIs.
-    """
+@mcp.tool()
+async def list_pal_resources() -> str:
+    """List all available PAL prompt resources. Returns URIs that can be used with read_pal_resource."""
+    print("[TOOL] Executing list_pal_resources...")
     resources: list[str] = []
     settings = get_settings()
 
-    # List prompt files
     prompts_path = settings.prompts_path
     if prompts_path.exists():
         for path in sorted(prompts_path.rglob("*.md")):
@@ -347,104 +95,15 @@ async def _handle_list_resources() -> (
                 continue
             resources.append(f"pal://prompts/{rel_path}")
 
-    # List custom prompts
     for name in list_custom_prompts():
         resources.append(f"pal://prompts/custom/{name}.md")
 
-    output = "Available resources:\n" + "\n".join(f"  - {r}" for r in resources)
-    return [types.TextContent(type="text", text=output)]
+    return "Available resources:\n" + "\n".join(f"  - {r}" for r in resources)
 
 
-# Granular notes handlers - DISABLED (using curl tool + prompt files instead)
-# def _handle_notes_list(
-#     arguments: dict[str, Any],
-# ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-#     """Handle the notes_list tool."""
-#     import json
-#
-#     tags = arguments.get("tags")
-#     limit = arguments.get("limit", 10)
-#     result = notes_list(tags=tags, limit=limit)
-#     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
-#
-#
-# def _handle_notes_add(
-#     arguments: dict[str, Any],
-# ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-#     """Handle the notes_add tool."""
-#     import json
-#
-#     content = arguments.get("content", "")
-#     tags = arguments.get("tags")
-#     result = notes_add(content=content, tags=tags)
-#     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
-#
-#
-# def _handle_notes_view(
-#     arguments: dict[str, Any],
-# ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-#     """Handle the notes_view tool."""
-#     import json
-#
-#     note_id = arguments.get("note_id", "")
-#     result = notes_view(note_id=note_id)
-#     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
-#
-#
-# def _handle_notes_delete(
-#     arguments: dict[str, Any],
-# ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-#     """Handle the notes_delete tool."""
-#     import json
-#
-#     note_id = arguments.get("note_id", "")
-#     result = notes_delete(note_id=note_id)
-#     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
-#
-#
-# def _handle_notes_tags(
-#     arguments: dict[str, Any],
-# ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-#     """Handle the notes_tags tool."""
-#     import json
-#
-#     note_id = arguments.get("note_id", "")
-#     tags = arguments.get("tags", [])
-#     result = notes_tags(note_id=note_id, tags=tags)
-#     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
-#
-#
-# def _handle_notes_search(
-#     arguments: dict[str, Any],
-# ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-#     """Handle the notes_search tool."""
-#     import json
-#
-#     query = arguments.get("query", "")
-#     tags = arguments.get("tags")
-#     result = notes_search(query=query, tags=tags)
-#     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
-#
-#
-# def _handle_notes_ai_search(
-#     arguments: dict[str, Any],
-# ) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-#     """Handle the notes_ai_search tool."""
-#     import json
-#
-#     query = arguments.get("query", "")
-#     tags = arguments.get("tags")
-#     result = notes_ai_search(query=query, tags=tags)
-#     return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
-
-
-def _handle_curl(
-    arguments: dict[str, Any],
-) -> list[types.TextContent | types.ImageContent | types.EmbeddedResource]:
-    """Handle the curl tool."""
-    import json
-
-    command = arguments.get("command", "")
-    timeout = arguments.get("timeout", 30)
+@mcp.tool()
+def pal_curl(command: str, timeout: int = 30) -> str:
+    """Execute a curl command on the server. Pass the full curl command string (e.g., 'curl -s http://localhost:7700/health'). All standard curl flags are supported. Returns JSON with 'success', 'output', and optionally 'error'."""
+    print("[TOOL] Executing pal_curl...")
     result = execute_curl(command=command, timeout=timeout)
-    return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+    return json.dumps(result, indent=2)
