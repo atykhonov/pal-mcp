@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from pal.config import get_settings
 from pal.prompts import (
     get_prompt_path,
     list_builtin_prompts,
@@ -12,10 +13,10 @@ from pal.prompts import (
     list_subcommands,
     load_custom_prompt,
     load_merged_prompt,
-    load_prompt,
     parse_frontmatter,
     save_custom_prompt,
 )
+from pal.protocol import PROTOCOL_INSTRUCTIONS
 from pal.tools.parser import ParsedCommand
 from pal.tools.types import CommandHandler, CommandResult
 
@@ -286,14 +287,17 @@ def handle_standard_prompt(
 ) -> CommandResult:
     """Handle prompt-based commands - returns bundled prompts.
 
-    Bundles root.md (protocol) + command prompts + user input for the LLM to interpret.
+    Bundles command prompts + user input for the LLM to interpret. The
+    PAL protocol header is shipped via the MCP `instructions` field by
+    default. Set PAL_PROTOCOL_HEADER_LOCATION to 'per-call' (or 'both')
+    to also prepend it to every response — for MCP harnesses that don't
+    surface server instructions to the model.
     """
     parts: list[str] = []
 
-    # 1. Always include root.md (protocol)
-    root_content = load_prompt("root")
-    if not root_content.startswith("Unknown command"):
-        parts.append(f"# PAL Protocol\n\n{root_content}")
+    # 1. Optional per-call protocol header (off in default 'instructions' mode)
+    if get_settings().protocol_header_location in ("per-call", "both"):
+        parts.append(f"# PAL Protocol\n\n{PROTOCOL_INSTRUCTIONS}")
 
     # 2. Build token list from parsed command
     tokens = [command.namespace]

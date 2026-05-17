@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 from unittest.mock import patch
 
+import pytest
+
 from pal.tools.handlers import (
     execute_command,
     handle_custom_prompt,
@@ -201,51 +203,63 @@ class TestHandleCustomPrompt:
 class TestHandleStandardPrompt:
     """Tests for handle_standard_prompt handler.
 
-    Note: handle_standard_prompt now bundles root.md + command prompts.
+    Default (PAL_PROTOCOL_HEADER_LOCATION=instructions): the handler
+    returns just the bundled command body + user input — the protocol
+    header is shipped to the client once via the MCP `instructions`
+    field, not per-call.
+
+    Setting PAL_PROTOCOL_HEADER_LOCATION to 'per-call' or 'both'
+    prepends the header to every response (covers harnesses that ignore
+    server instructions, or operators who want belt-and-suspenders).
     """
 
-    def test_bundles_prompts(self) -> None:
-        """handle_standard_prompt bundles root and command prompts."""
-
-        def mock_load_prompt(ns: str, sub: str | None = None) -> str:
-            return {
-                ("root", None): "Protocol content",
-            }.get((ns, sub), f"Unknown command: {ns}")
+    def test_omits_protocol_header_by_default(self) -> None:
+        """No `# PAL Protocol` block in the response when location is 'instructions'."""
 
         def mock_load_merged(path_parts: list[str]) -> str | None:
             key = tuple(path_parts)
-            return {
-                ("test",): "Test content",
-            }.get(key)
+            return {("test",): "Test content"}.get(key)
 
-        with (
-            patch("pal.tools.handlers.load_prompt", side_effect=mock_load_prompt),
-            patch("pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged),
+        with patch(
+            "pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged
         ):
             cmd = ParsedCommand(namespace="test", rest="")
             result = handle_standard_prompt(cmd)
-            assert "# PAL Protocol" in result.output
-            assert "Protocol content" in result.output
+            assert "# PAL Protocol" not in result.output
             assert "# Command: test" in result.output
             assert "Test content" in result.output
+
+    @pytest.mark.parametrize("location", ["per-call", "both"])
+    def test_includes_protocol_header_when_location_requests_per_call(
+        self, location: str
+    ) -> None:
+        """'per-call' and 'both' both prepend the protocol header."""
+
+        def mock_load_merged(path_parts: list[str]) -> str | None:
+            key = tuple(path_parts)
+            return {("test",): "Test content"}.get(key)
+
+        with (
+            patch(
+                "pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged
+            ),
+            patch("pal.tools.handlers.get_settings") as mock_get_settings,
+        ):
+            mock_get_settings.return_value.protocol_header_location = location
+            cmd = ParsedCommand(namespace="test", rest="")
+            result = handle_standard_prompt(cmd)
+            assert "# PAL Protocol" in result.output
+            assert "# Command: test" in result.output
 
     def test_includes_rest_in_header(self) -> None:
         """handle_standard_prompt includes rest in header."""
 
-        def mock_load_prompt(ns: str, sub: str | None = None) -> str:
-            return {
-                ("root", None): "Protocol",
-            }.get((ns, sub), f"Unknown command: {ns}")
-
         def mock_load_merged(path_parts: list[str]) -> str | None:
             key = tuple(path_parts)
-            return {
-                ("test",): "Content",
-            }.get(key)
+            return {("test",): "Content"}.get(key)
 
-        with (
-            patch("pal.tools.handlers.load_prompt", side_effect=mock_load_prompt),
-            patch("pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged),
+        with patch(
+            "pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged
         ):
             cmd = ParsedCommand(namespace="test", rest="-v")
             result = handle_standard_prompt(cmd)
@@ -254,20 +268,12 @@ class TestHandleStandardPrompt:
     def test_includes_user_input(self) -> None:
         """handle_standard_prompt includes user input section."""
 
-        def mock_load_prompt(ns: str, sub: str | None = None) -> str:
-            return {
-                ("root", None): "Protocol",
-            }.get((ns, sub), f"Unknown command: {ns}")
-
         def mock_load_merged(path_parts: list[str]) -> str | None:
             key = tuple(path_parts)
-            return {
-                ("notes",): "Notes command",
-            }.get(key)
+            return {("notes",): "Notes command"}.get(key)
 
-        with (
-            patch("pal.tools.handlers.load_prompt", side_effect=mock_load_prompt),
-            patch("pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged),
+        with patch(
+            "pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged
         ):
             cmd = ParsedCommand(namespace="notes", rest="add hello world")
             result = handle_standard_prompt(cmd)
@@ -281,11 +287,6 @@ class TestHandleStandardPrompt:
         Running $$wfi start should find and load wfi/start.md.
         """
 
-        def mock_load_prompt(ns: str, sub: str | None = None) -> str:
-            return {
-                ("root", None): "Protocol",
-            }.get((ns, sub), f"Unknown command: {ns}")
-
         def mock_load_merged(path_parts: list[str]) -> str | None:
             key = tuple(path_parts)
             return {
@@ -293,9 +294,8 @@ class TestHandleStandardPrompt:
                 ("wfi", "start"): "WFI start content",
             }.get(key)
 
-        with (
-            patch("pal.tools.handlers.load_prompt", side_effect=mock_load_prompt),
-            patch("pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged),
+        with patch(
+            "pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged
         ):
             cmd = ParsedCommand(namespace="wfi", rest="start TRM-594")
             result = handle_standard_prompt(cmd)
@@ -319,11 +319,6 @@ class TestExecuteCommand:
     def test_falls_back_to_standard_prompt(self) -> None:
         """execute_command falls back to standard prompt."""
 
-        def mock_load_prompt(ns: str, sub: str | None = None) -> str:
-            return {
-                ("root", None): "Protocol",
-            }.get((ns, sub), f"Unknown command: {ns}")
-
         def mock_load_merged(path_parts: list[str]) -> str | None:
             key = tuple(path_parts)
             return {
@@ -332,8 +327,9 @@ class TestExecuteCommand:
 
         with (
             patch("pal.tools.handlers.load_custom_prompt", return_value=None),
-            patch("pal.tools.handlers.load_prompt", side_effect=mock_load_prompt),
-            patch("pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged),
+            patch(
+                "pal.tools.handlers.load_merged_prompt", side_effect=mock_load_merged
+            ),
         ):
             cmd = ParsedCommand(namespace="unknown", rest="")
             result = asyncio.run(execute_command(cmd))
