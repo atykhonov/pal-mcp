@@ -214,7 +214,7 @@ class TestHandleStandardPrompt:
     """
 
     def test_omits_protocol_header_by_default(self) -> None:
-        """No `# PAL Protocol` block in the response when location is 'instructions'."""
+        """No `# PAL Command Protocol` block in the response when location is 'instructions'."""
 
         def mock_load_merged(path_parts: list[str]) -> str | None:
             key = tuple(path_parts)
@@ -225,7 +225,7 @@ class TestHandleStandardPrompt:
         ):
             cmd = ParsedCommand(namespace="test", rest="")
             result = handle_standard_prompt(cmd)
-            assert "# PAL Protocol" not in result.output
+            assert "# PAL Command Protocol" not in result.output
             assert "# Command: test" in result.output
             assert "Test content" in result.output
 
