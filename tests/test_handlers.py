@@ -248,7 +248,7 @@ class TestHandleStandardPrompt:
             mock_get_settings.return_value.protocol_header_location = location
             cmd = ParsedCommand(namespace="test", rest="")
             result = handle_standard_prompt(cmd)
-            assert "# PAL Protocol" in result.output
+            assert "# PAL Command Protocol" in result.output
             assert "# Command: test" in result.output
 
     def test_includes_rest_in_header(self) -> None:

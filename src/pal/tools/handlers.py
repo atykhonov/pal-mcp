@@ -297,7 +297,7 @@ def handle_standard_prompt(
 
     # 1. Optional per-call protocol header (off in default 'instructions' mode)
     if get_settings().protocol_header_location in ("per-call", "both"):
-        parts.append(f"# PAL Protocol\n\n{PROTOCOL_INSTRUCTIONS}")
+        parts.append(PROTOCOL_INSTRUCTIONS)
 
     # 2. Build token list from parsed command
     tokens = [command.namespace]

@@ -493,7 +493,7 @@ def _extract_description(content: str) -> str:
 
 
 # Internal bundled files that should not appear in help
-_INTERNAL_PROMPTS = {"root", "help", "curl"}
+_INTERNAL_PROMPTS = {"help", "curl"}
 
 
 def list_builtin_prompts() -> list[tuple[str, str, list[str]]]:
