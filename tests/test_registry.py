@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pal.tools.registry import mcp
+from pal.tools.registry import mcp, run_pal_command
 
 
 class TestToolRegistration:
@@ -62,3 +62,28 @@ class TestToolRegistration:
     def test_server_instructions(self) -> None:
         """Server instructions are set."""
         assert "$$" in (mcp.instructions or "")
+
+
+class TestRunPalCommandRejectsPipelines:
+    """run_pal_command must refuse multi-stage strings and direct the
+    caller (the LLM) to parse_pipeline first.
+
+    We only assert against the rejection path (which never touches ctx),
+    so passing ctx=None is safe — the guard fires before any ctx access.
+    The "raw-mode commands are NOT rejected" case is covered by the
+    is_pipeline unit tests in tests/test_pipeline.py (Task 5), so we
+    don't repeat it here.
+    """
+
+    async def test_rejects_pipe(self) -> None:
+        result = await run_pal_command(command="a | b", ctx=None)  # type: ignore[arg-type]
+        assert "parse_pipeline" in result
+        assert "pipeline" in result.lower()
+
+    async def test_rejects_and(self) -> None:
+        result = await run_pal_command(command="a && b", ctx=None)  # type: ignore[arg-type]
+        assert "parse_pipeline" in result
+
+    async def test_rejects_seq(self) -> None:
+        result = await run_pal_command(command="a ; b", ctx=None)  # type: ignore[arg-type]
+        assert "parse_pipeline" in result

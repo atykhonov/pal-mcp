@@ -17,7 +17,7 @@ from pal.prompts import (
 from pal.tools.curl import execute_curl
 from pal.tools.handlers import execute_command
 from pal.tools.parser import parse_command
-from pal.tools.pipeline import tokenize_pipeline
+from pal.tools.pipeline import is_pipeline, tokenize_pipeline
 
 SERVER_INSTRUCTIONS = (
     "When you see $$ at the start of user input, "
@@ -33,10 +33,31 @@ mcp = FastMCP(
 
 @mcp.tool()
 async def run_pal_command(command: str, ctx: Context) -> str:  # type: ignore[type-arg]
-    """Execute a PAL $$ command. For built-in commands (echo, prompt, help): executes and returns result. For prompt-based commands: returns bundled prompts for you to follow."""
+    """Execute a single PAL $$ command stage.
+
+    For built-in commands (echo, prompt, help): executes and returns result.
+    For prompt-based commands: returns bundled prompts for you to follow.
+
+    Does NOT execute pipelines. If `command` contains a pipeline operator
+    (` | `, ` && `, ` ; ` — space-surrounded, outside any ` -- ` raw region),
+    this tool returns an error directing you to call parse_pipeline first
+    and then call run_pal_command once per returned stage.
+    """
     command = command.strip()
     if not command:
         return "Error: No command provided"
+
+    if is_pipeline(command):
+        return (
+            "Error: Pipeline operators detected in command. "
+            "Call parse_pipeline(command) first to split the string "
+            "into stages, then call run_pal_command once per returned "
+            "stage, passing the previous stage's output as the next "
+            "stage's input when op == '|'. "
+            "If the operator characters were meant literally, place "
+            "the content at the end of the command after ` -- ` to "
+            "activate raw mode and prevent operator parsing."
+        )
 
     print("[TOOL] Executing run_pal_command...")
     parsed = parse_command(command)
