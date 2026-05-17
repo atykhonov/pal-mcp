@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pal.tools.pipeline import PipelineStage, tokenize_pipeline
+from pal.tools.pipeline import PipelineStage, is_pipeline, tokenize_pipeline
 
 
 class TestTokenizeSingleStage:
@@ -133,3 +133,31 @@ class TestGrammarCornerCases:
             PipelineStage(cmd="notes search docker", op="|"),
             PipelineStage(cmd="summarize", op=None),
         ]
+
+
+class TestIsPipeline:
+    """is_pipeline mirrors tokenize_pipeline's operator detection."""
+
+    def test_single_stage_is_not_pipeline(self) -> None:
+        assert is_pipeline("echo hello") is False
+
+    def test_empty_is_not_pipeline(self) -> None:
+        assert is_pipeline("") is False
+
+    def test_pipe_is_pipeline(self) -> None:
+        assert is_pipeline("a | b") is True
+
+    def test_and_is_pipeline(self) -> None:
+        assert is_pipeline("a && b") is True
+
+    def test_seq_is_pipeline(self) -> None:
+        assert is_pipeline("a ; b") is True
+
+    def test_raw_mode_suppresses_detection(self) -> None:
+        assert is_pipeline("tr -- a | b") is False
+
+    def test_no_spaces_around_operator_is_not_pipeline(self) -> None:
+        assert is_pipeline("a|b") is False
+
+    def test_double_pipe_is_not_pipeline(self) -> None:
+        assert is_pipeline("a || b") is False

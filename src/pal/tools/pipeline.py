@@ -66,3 +66,21 @@ def tokenize_pipeline(command: str) -> list[PipelineStage]:
         stages.append(PipelineStage(cmd=stage_text, op=next_op.strip()))
         cursor = next_op_index + len(next_op)
     return stages
+
+
+def is_pipeline(command: str) -> bool:
+    """Return True if `command` contains a pipeline operator outside raw mode.
+
+    Uses the same scan rules as tokenize_pipeline so the two cannot drift.
+    Avoids building the full stage list — useful as a cheap guard.
+    """
+    text = command.strip()
+    if not text:
+        return False
+    raw_boundary = text.find(_RAW_EDGE_MARKER)
+    scan_limit = raw_boundary if raw_boundary != -1 else len(text)
+    for op in _OPERATORS:
+        idx = text.find(op)
+        if idx != -1 and idx < scan_limit:
+            return True
+    return False
