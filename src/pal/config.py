@@ -46,6 +46,30 @@ class Settings(BaseSettings):
 
     log_level: Annotated[str, Field(description="Logging level")] = "INFO"
 
+    protocol_header_location: Annotated[
+        Literal["instructions", "per-call", "both"],
+        Field(
+            description=(
+                "Where to surface the PAL protocol header to the LLM. "
+                "'instructions' (default): include in FastMCP `instructions` "
+                "field only — shipped once per session, saves ~500 tokens per "
+                "prompt-based call. 'per-call': prepend to every prompt response "
+                "and omit from `instructions` — use when your MCP harness ignores "
+                "or doesn't surface server instructions. 'both': include in "
+                "`instructions` AND prepend per-call — use only when your harness "
+                "re-broadcasts `instructions` and you want belt-and-suspenders. "
+                "NOTE on 'per-call': this only restores the *interpretation* of "
+                "bundled prompts ($MSG, $$echo, etc.). It does NOT restore the "
+                "*discovery* signal (the call-out telling the LLM to invoke "
+                "run_pal_command on $$-prefixed input), because tool responses "
+                "only reach the LLM after a tool call. If your harness ignores "
+                "`instructions`, also add 'when input starts with $$, call "
+                "run_pal_command' to your user-side system prompt (CLAUDE.md, "
+                "Cursor system prompt, etc.)."
+            ),
+        ),
+    ] = "instructions"
+
     # OAuth settings
     oauth_enabled: Annotated[
         bool, Field(description="Enable OAuth 2.0 for external connections")
