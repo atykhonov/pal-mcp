@@ -21,25 +21,6 @@ Available variables:
 - `$REPLIES` - All your previous responses (concatenated)
 - Heading variables: `## Summary` creates `$SUMMARY`
 
-## Pipeline Operators
-
-Commands can be chained using operators. When you detect a pipeline in the user input:
-
-1. **Parse the pipeline** - Split on ` | `, `&&`, or `;` operators (space-surrounded)
-2. **Execute sequentially** - Run each command in order
-3. **Pass output forward** - For `|`, append previous output to next command's input
-
-Operators:
-- `|` (pipe) - Pass output as input to next command
-- `&&` (and) - Run next only if current succeeds
-- `;` (seq) - Run next regardless
-
-Example: `$$notes search docker | summarize`
-→ First execute `notes search docker`, then pass result to `summarize`
-
-**Important**: Content after `--` delimiter is raw text and should NOT be split on operators.
-For example: `$$prompt foo -- echo hello | world` has no pipeline - everything after `--` is content.
-
 ## Executing Prompt-Based Commands
 
 When you receive bundled prompts (this response):
