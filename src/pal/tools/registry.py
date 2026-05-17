@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from typing import Literal, assert_never
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.server.transport_security import TransportSecuritySettings
@@ -14,15 +15,37 @@ from pal.prompts import (
     load_custom_prompt,
     load_prompt,
 )
+from pal.protocol import PROTOCOL_INSTRUCTIONS
 from pal.tools.curl import execute_curl
 from pal.tools.handlers import execute_command
 from pal.tools.parser import parse_command
 from pal.tools.pipeline import is_pipeline, tokenize_pipeline
 
-SERVER_INSTRUCTIONS = (
+_CALL_OUT = (
     "When you see $$ at the start of user input, "
     "call run_pal_command with the command text."
 )
+
+
+def build_server_instructions(
+    location: Literal["instructions", "per-call", "both"],
+) -> str:
+    """Compose the MCP `instructions` payload based on protocol-header location.
+
+    'instructions' / 'both' — embed the full protocol so MCP clients receive
+    it once during `initialize`. 'per-call' — keep only the call-out sentence
+    so the protocol arrives only via per-call prepend (see handlers.py).
+    """
+    match location:
+        case "instructions" | "both":
+            return f"{_CALL_OUT}\n\n{PROTOCOL_INSTRUCTIONS}"
+        case "per-call":
+            return _CALL_OUT
+        case _:
+            assert_never(location)
+
+
+SERVER_INSTRUCTIONS = build_server_instructions(get_settings().protocol_header_location)
 
 mcp = FastMCP(
     "pal-server",

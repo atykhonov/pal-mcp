@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from pal.tools.registry import mcp, run_pal_command
+from pal.tools.registry import build_server_instructions, mcp, run_pal_command
 
 
 class TestToolRegistration:
@@ -59,9 +59,32 @@ class TestToolRegistration:
         assert "command" in props
         assert "timeout" in props
 
-    def test_server_instructions(self) -> None:
-        """Server instructions are set."""
-        assert "$$" in (mcp.instructions or "")
+    def test_mcp_instructions_wired_to_server_instructions(self) -> None:
+        """FastMCP was constructed with the computed SERVER_INSTRUCTIONS string."""
+        from pal.tools.registry import SERVER_INSTRUCTIONS
+
+        assert mcp.instructions == SERVER_INSTRUCTIONS
+
+    def test_build_server_instructions_instructions_includes_protocol(self) -> None:
+        """'instructions' mode (default) includes the protocol body."""
+        built = build_server_instructions("instructions")
+        assert "run_pal_command" in built
+        assert "$$echo" in built
+        assert "Executing Prompt-Based Commands" in built
+
+    def test_build_server_instructions_per_call_omits_protocol(self) -> None:
+        """'per-call' mode strips the protocol from the instructions string."""
+        built = build_server_instructions("per-call")
+        assert "run_pal_command" in built  # call-out kept
+        assert "$$echo" not in built  # protocol stripped
+        assert "Executing Prompt-Based Commands" not in built
+
+    def test_build_server_instructions_both_includes_protocol(self) -> None:
+        """'both' mode keeps the protocol in the instructions string."""
+        built = build_server_instructions("both")
+        assert "run_pal_command" in built
+        assert "$$echo" in built
+        assert "Executing Prompt-Based Commands" in built
 
 
 class TestRunPalCommandRejectsPipelines:
