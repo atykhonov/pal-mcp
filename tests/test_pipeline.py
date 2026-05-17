@@ -62,3 +62,35 @@ class TestTokenizeOperators:
             PipelineStage(cmd="b", op=";"),
             PipelineStage(cmd="c", op=None),
         ]
+
+
+class TestRawModeEdgeMarker:
+    """` -- ` (space-dash-dash-space) starts raw mode for the remainder."""
+
+    def test_double_dash_suppresses_pipe(self) -> None:
+        stages = tokenize_pipeline("tr -- hello | world")
+        assert stages == [PipelineStage(cmd="tr -- hello | world", op=None)]
+
+    def test_double_dash_suppresses_all_operators(self) -> None:
+        stages = tokenize_pipeline("cmd -- a | b && c ; d")
+        assert stages == [PipelineStage(cmd="cmd -- a | b && c ; d", op=None)]
+
+    def test_second_double_dash_is_payload(self) -> None:
+        stages = tokenize_pipeline("cmd -- foo -- bar | baz")
+        assert stages == [PipelineStage(cmd="cmd -- foo -- bar | baz", op=None)]
+
+    def test_operator_before_double_dash_still_splits(self) -> None:
+        stages = tokenize_pipeline("a | tr -- hello | world")
+        assert stages == [
+            PipelineStage(cmd="a", op="|"),
+            PipelineStage(cmd="tr -- hello | world", op=None),
+        ]
+
+    def test_double_dash_without_spaces_is_not_edge_marker(self) -> None:
+        # `--help` is a flag, not a raw-mode marker (no leading space).
+        stages = tokenize_pipeline("echo --help")
+        assert stages == [PipelineStage(cmd="echo --help", op=None)]
+
+    def test_unicode_payload_passes_through(self) -> None:
+        stages = tokenize_pipeline("tr -- 你好 | мир 🌍")
+        assert stages == [PipelineStage(cmd="tr -- 你好 | мир 🌍", op=None)]

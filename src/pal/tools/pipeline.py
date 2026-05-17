@@ -31,6 +31,8 @@ _OPERATORS: tuple[str, ...] = (" && ", " | ", " ; ")
 # recognise ` & ` today; this just documents the lookup-order intent if
 # more operators are added).
 
+_RAW_EDGE_MARKER = " -- "
+
 
 def tokenize_pipeline(command: str) -> list[PipelineStage]:
     """Tokenize a $$command string into pipeline stages.
@@ -42,6 +44,9 @@ def tokenize_pipeline(command: str) -> list[PipelineStage]:
     if not text:
         return []
 
+    raw_boundary = text.find(_RAW_EDGE_MARKER)
+    scan_limit = raw_boundary if raw_boundary != -1 else len(text)
+
     stages: list[PipelineStage] = []
     cursor = 0
     while cursor < len(text):
@@ -49,7 +54,7 @@ def tokenize_pipeline(command: str) -> list[PipelineStage]:
         next_op: str | None = None
         for op in _OPERATORS:
             idx = text.find(op, cursor)
-            if idx == -1:
+            if idx == -1 or idx >= scan_limit:
                 continue
             if next_op_index == -1 or idx < next_op_index:
                 next_op_index = idx
