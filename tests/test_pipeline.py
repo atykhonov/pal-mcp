@@ -94,3 +94,42 @@ class TestRawModeEdgeMarker:
     def test_unicode_payload_passes_through(self) -> None:
         stages = tokenize_pipeline("tr -- 你好 | мир 🌍")
         assert stages == [PipelineStage(cmd="tr -- 你好 | мир 🌍", op=None)]
+
+
+class TestGrammarCornerCases:
+    """Edge cases that should NOT split on operators."""
+
+    def test_pipe_without_spaces_is_one_stage(self) -> None:
+        stages = tokenize_pipeline("echo a|b")
+        assert stages == [PipelineStage(cmd="echo a|b", op=None)]
+
+    def test_double_pipe_is_opaque(self) -> None:
+        # `||` contains no ` | ` substring (no space-pipe-space anywhere).
+        stages = tokenize_pipeline("a || b")
+        assert stages == [PipelineStage(cmd="a || b", op=None)]
+
+    def test_amp_without_spaces_is_one_stage(self) -> None:
+        stages = tokenize_pipeline("foo&&bar")
+        assert stages == [PipelineStage(cmd="foo&&bar", op=None)]
+
+    def test_dollar_var_is_opaque(self) -> None:
+        # Variable substitution stays LLM-side; $5 is just text here.
+        stages = tokenize_pipeline("echo $5 && cat")
+        assert stages == [
+            PipelineStage(cmd="echo $5", op="&&"),
+            PipelineStage(cmd="cat", op=None),
+        ]
+
+    def test_url_query_string_is_opaque(self) -> None:
+        stages = tokenize_pipeline("curl https://x.test?foo&bar | jq")
+        assert stages == [
+            PipelineStage(cmd="curl https://x.test?foo&bar", op="|"),
+            PipelineStage(cmd="jq", op=None),
+        ]
+
+    def test_realistic_notes_pipeline(self) -> None:
+        stages = tokenize_pipeline("notes search docker | summarize")
+        assert stages == [
+            PipelineStage(cmd="notes search docker", op="|"),
+            PipelineStage(cmd="summarize", op=None),
+        ]
