@@ -26,6 +26,12 @@ class PipelineStage:
     op: str | None
 
 
+_OPERATORS: tuple[str, ...] = (" && ", " | ", " ; ")
+# Order matters: ` && ` must be checked before ` & ` would be (we don't
+# recognise ` & ` today; this just documents the lookup-order intent if
+# more operators are added).
+
+
 def tokenize_pipeline(command: str) -> list[PipelineStage]:
     """Tokenize a $$command string into pipeline stages.
 
@@ -35,4 +41,23 @@ def tokenize_pipeline(command: str) -> list[PipelineStage]:
     text = command.strip()
     if not text:
         return []
-    return [PipelineStage(cmd=text, op=None)]
+
+    stages: list[PipelineStage] = []
+    cursor = 0
+    while cursor < len(text):
+        next_op_index = -1
+        next_op: str | None = None
+        for op in _OPERATORS:
+            idx = text.find(op, cursor)
+            if idx == -1:
+                continue
+            if next_op_index == -1 or idx < next_op_index:
+                next_op_index = idx
+                next_op = op
+        if next_op is None:
+            stages.append(PipelineStage(cmd=text[cursor:].strip(), op=None))
+            break
+        stage_text = text[cursor:next_op_index].strip()
+        stages.append(PipelineStage(cmd=stage_text, op=next_op.strip()))
+        cursor = next_op_index + len(next_op)
+    return stages
