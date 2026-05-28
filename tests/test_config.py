@@ -39,4 +39,7 @@ def test_protocol_header_location_settable_via_kwarg(
 ) -> None:
     """The field can be overridden at construction time (used by test fixtures)."""
     monkeypatch.delenv("PAL_PROTOCOL_HEADER_LOCATION", raising=False)
-    assert Settings(protocol_header_location="per-call").protocol_header_location == "per-call"
+    assert (
+        Settings(protocol_header_location="per-call").protocol_header_location
+        == "per-call"
+    )
