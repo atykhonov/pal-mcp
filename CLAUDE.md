@@ -81,3 +81,7 @@ All settings via `PAL_*` environment variables (see `config.py`):
 - **Async handlers** — Tool handlers in registry.py are async, use `request_ctx.get()` for MCP session access
 - **Type hints** — Strict mypy enabled, use `from __future__ import annotations`
 - **Tests** — pytest-asyncio with `asyncio_mode = "auto"`, fixtures in `conftest.py`
+
+## Git Conventions
+
+- **No `Co-Authored-By` trailer.** Do not append `Co-Authored-By: Claude ...` (or any co-author trailer) to commit messages on this repo.
