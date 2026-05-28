@@ -66,6 +66,41 @@ class TestParseCommand:
         assert result
         assert bool(result) is True
 
+    def test_strips_leading_dollar_prefix(self) -> None:
+        """Leading `$$` is stripped so callers can pass either form.
+
+        The MCP `instructions` field is ambiguous about whether the LLM should
+        pass `$$cmd` or `cmd` to run_pal_command; some sessions strip, some
+        don't. Tolerating both keeps behavior uniform across clients.
+        """
+        result = parse_command("$$init-session")
+        assert result == ParsedCommand(namespace="init-session", rest="")
+
+    def test_strips_dollar_prefix_with_rest(self) -> None:
+        """`$$cmd args` parses the same as `cmd args`."""
+        result = parse_command("$$tr Hello world")
+        assert result == ParsedCommand(namespace="tr", rest="Hello world")
+
+    def test_strips_dollar_prefix_with_inner_whitespace(self) -> None:
+        """Whitespace between `$$` and the command name is tolerated."""
+        result = parse_command("$$ init-session")
+        assert result == ParsedCommand(namespace="init-session", rest="")
+
+    def test_only_dollar_prefix_yields_empty(self) -> None:
+        """A bare `$$` (no command) produces an empty namespace, not `$$`."""
+        result = parse_command("$$")
+        assert result == ParsedCommand(namespace="", rest="")
+        assert not result
+
+    def test_strips_only_one_dollar_prefix(self) -> None:
+        """`$$$$cmd` (double-prefixed input) collapses to `cmd`, not `$$cmd`.
+
+        Guards against the `$$$$init-session` artifact that appeared when an
+        already-prefixed input was wrapped again by the caller.
+        """
+        result = parse_command("$$$$init-session")
+        assert result == ParsedCommand(namespace="init-session", rest="")
+
 
 class TestParsedCommand:
     """Tests for ParsedCommand dataclass."""

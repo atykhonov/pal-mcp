@@ -46,7 +46,16 @@ def parse_command(raw_command: str) -> ParsedCommand:
     if not raw_command:
         return ParsedCommand(namespace="", rest="")
 
-    parts = raw_command.split(None, 1)  # Split on first whitespace
+    # Tolerate a leading `$$` (clients differ on whether they strip the
+    # prefix before calling); collapse repeats too, so `$$$$cmd` → `cmd`.
+    stripped = raw_command.lstrip()
+    while stripped.startswith("$$"):
+        stripped = stripped[2:].lstrip()
+
+    if not stripped:
+        return ParsedCommand(namespace="", rest="")
+
+    parts = stripped.split(None, 1)  # Split on first whitespace
     namespace = parts[0].lower()
     rest = parts[1] if len(parts) > 1 else ""
 
