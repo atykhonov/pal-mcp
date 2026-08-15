@@ -51,6 +51,11 @@ mcp = FastMCP(
     "pal-server",
     instructions=SERVER_INSTRUCTIONS,
     transport_security=TransportSecuritySettings(enable_dns_rebinding_protection=False),
+    # PAL tools are pure request/response with no server-initiated messages, so
+    # per-session state buys nothing. Stateless Streamable HTTP makes every
+    # request self-contained (no Mcp-Session-Id required), which is more robust
+    # across the varied probe/handshake behaviours of MCP connectors.
+    stateless_http=True,
 )
 
 

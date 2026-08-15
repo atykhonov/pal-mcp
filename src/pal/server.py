@@ -40,7 +40,7 @@ class AuthMiddleware:
             response = Response(
                 "Authentication required",
                 status_code=401,
-                headers={"www-authenticate": "Bearer"},
+                headers={"www-authenticate": self._challenge(scope)},
             )
             await response(scope, receive, send)
             return
@@ -58,6 +58,21 @@ class AuthMiddleware:
                 return True
         client_ip, is_proxied = self._get_client_ip(scope)
         return not is_proxied and self.oauth.is_ip_allowed(client_ip)
+
+    def _challenge(self, scope: dict[str, Any]) -> str:
+        """Build a WWW-Authenticate value pointing at the resource metadata.
+
+        Per RFC 9728 the client discovers the authorization server from the
+        protected resource's metadata, whose URL is the request path with the
+        well-known segment prepended.
+        """
+        base_url = (
+            self.settings.oauth_public_url
+            or f"http://localhost:{self.settings.server_port}"
+        )
+        path = scope.get("path", "")
+        metadata_url = f"{base_url}/.well-known/oauth-protected-resource{path}"
+        return f'Bearer resource_metadata="{metadata_url}"'
 
     def _get_bearer_token(self, scope: dict[str, Any]) -> str | None:
         for name, value in scope.get("headers", []):
@@ -83,15 +98,19 @@ def _create_oauth_routes(oauth: OAuthManager, settings: Settings) -> list[Route]
     async def oauth_metadata(request: Request) -> JSONResponse:  # noqa: ARG001
         return JSONResponse(oauth.get_metadata())
 
-    async def protected_resource_metadata(
-        request: Request,  # noqa: ARG001
-    ) -> JSONResponse:
+    async def protected_resource_metadata(request: Request) -> JSONResponse:
         base_url = (
             settings.oauth_public_url or f"http://localhost:{settings.server_port}"
         )
+        # RFC 9728 builds the metadata path by inserting the well-known segment
+        # before the resource path, so /sse is fetched at
+        # /.well-known/oauth-protected-resource/sse. Reflect that suffix back so
+        # the advertised resource is the exact canonical endpoint URI.
+        resource_path = request.path_params.get("resource", "")
+        resource = f"{base_url}/{resource_path}" if resource_path else base_url
         return JSONResponse(
             {
-                "resource": base_url,
+                "resource": resource,
                 "authorization_servers": [base_url],
             }
         )
@@ -232,6 +251,14 @@ def _create_oauth_routes(oauth: OAuthManager, settings: Settings) -> list[Route]
         ),
         Route(
             "/.well-known/oauth-protected-resource",
+            protected_resource_metadata,
+            methods=["GET"],
+        ),
+        # RFC 9728 path-suffixed form, e.g. .../oauth-protected-resource/sse.
+        # Must be public (registered above the authed Mount) so the client can
+        # discover the authorization server before it holds a token.
+        Route(
+            "/.well-known/oauth-protected-resource/{resource:path}",
             protected_resource_metadata,
             methods=["GET"],
         ),
